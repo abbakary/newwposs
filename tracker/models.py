@@ -684,6 +684,9 @@ class Invoice(models.Model):
     # Additional fields
     notes = models.TextField(blank=True, null=True)
     terms = models.TextField(blank=True, null=True)
+    attended_by = models.CharField(max_length=128, blank=True, null=True)
+    kind_attention = models.CharField(max_length=128, blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
 
     # Tracking
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='invoices_created')

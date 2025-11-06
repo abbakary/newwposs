@@ -168,7 +168,8 @@ def api_service_types(request):
                 'id': item.id,
                 'name': item.name,
                 'brand': brand_name,
-                'quantity': item.quantity or 0
+                'quantity': item.quantity or 0,
+                'price': float(item.price or 0)
             })
 
         logger.debug(f"api_service_types: Returning {len(inventory_items)} inventory items")

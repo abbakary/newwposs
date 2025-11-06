@@ -1196,17 +1196,93 @@ class ProfileForm(forms.ModelForm):
         return profile
 
 
+from django.db import IntegrityError
+
+# Build default choices for customer type fields at import time, with safe fallback
+try:
+    from .models import Customer as _Customer
+    CUSTOMER_TYPE_CHOICES = [('', '---')] + list(getattr(_Customer, 'TYPE_CHOICES', []))
+    PERSONAL_SUBTYPE_CHOICES = [('', '---')] + list(getattr(_Customer, 'PERSONAL_SUBTYPE', []))
+except Exception:
+    CUSTOMER_TYPE_CHOICES = [('', '---')]
+    PERSONAL_SUBTYPE_CHOICES = [('', '---')]
+
 class InvoiceForm(forms.ModelForm):
+    # Inline customer fields to allow creating or selecting a customer while creating an invoice
+    existing_customer = forms.ModelChoiceField(queryset=None, required=False, widget=forms.Select(attrs={'class': 'form-select'}))
+    customer_full_name = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Customer full name'}))
+    customer_phone = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone number'}))
+    customer_whatsapp = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'WhatsApp number (optional)'}))
+    customer_email = forms.EmailField(required=False, widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email (optional)'}))
+    customer_address = forms.CharField(required=False, widget=forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Address (optional)'}))
+    customer_organization_name = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Organization (optional)'}))
+    customer_tax_number = forms.CharField(required=False, widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Tax/ID number (optional)'}))
+    customer_type = forms.ChoiceField(required=False, choices=CUSTOMER_TYPE_CHOICES, widget=forms.Select(attrs={'class': 'form-select'}))
+    customer_personal_subtype = forms.ChoiceField(required=False, choices=PERSONAL_SUBTYPE_CHOICES, widget=forms.Select(attrs={'class': 'form-select'}))
+
     class Meta:
         model = Invoice
-        fields = ['reference', 'due_date', 'tax_rate', 'notes', 'terms']
+        fields = ['reference', 'due_date', 'tax_rate', 'attended_by', 'kind_attention', 'remarks', 'notes', 'terms']
         widgets = {
             'reference': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Customer PO or reference'}),
             'due_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'tax_rate': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'max': '100'}),
+            'attended_by': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Attended By'}),
+            'kind_attention': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Kind Attention'}),
+            'remarks': forms.Textarea(attrs={'class': 'form-control', 'rows': 2, 'placeholder': 'Remarks'}),
             'notes': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Additional notes'}),
             'terms': forms.Textarea(attrs={'class': 'form-control', 'rows': 3, 'placeholder': 'Payment terms and conditions'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        # Accept an optional user kwarg to scope existing_customer queryset to the user's branch
+        user = kwargs.pop('user', None)
+        super(InvoiceForm, self).__init__(*args, **kwargs)
+        try:
+            from .models import Customer
+            from .utils import get_user_branch
+            if user is not None:
+                branch = get_user_branch(user)
+                if branch:
+                    self.fields['existing_customer'].queryset = Customer.objects.filter(branch=branch).order_by('full_name')
+                else:
+                    self.fields['existing_customer'].queryset = Customer.objects.none()
+            else:
+                self.fields['existing_customer'].queryset = Customer.objects.none()
+        except Exception:
+            # If importing models fails for any reason, ensure the field still renders as empty
+            try:
+                self.fields['existing_customer'].queryset = []
+            except Exception:
+                pass
+
+    def clean(self):
+        cleaned = super().clean()
+        # Ensure that either an existing customer is chosen or at least a name is provided
+        existing = cleaned.get('existing_customer')
+        name = (cleaned.get('customer_full_name') or '').strip()
+        phone = (cleaned.get('customer_phone') or '').strip()
+        ctype = cleaned.get('customer_type')
+        psub = cleaned.get('customer_personal_subtype')
+
+        # Basic presence validation
+        if not existing and not name:
+            self.add_error('customer_full_name', 'Please select an existing customer or provide a customer name.')
+
+        # If organizational customer, ensure org name and tax number are provided
+        if ctype in {'government', 'ngo', 'company'}:
+            org = (cleaned.get('customer_organization_name') or '').strip()
+            tax = (cleaned.get('customer_tax_number') or '').strip()
+            if not org:
+                self.add_error('customer_organization_name', 'Organization name is required for organization customers')
+            if not tax:
+                self.add_error('customer_tax_number', 'Tax number is required for organization customers')
+
+        # If personal, ensure personal_subtype is provided
+        if ctype == 'personal' and not psub:
+            self.add_error('customer_personal_subtype', 'Please specify personal subtype (owner or driver)')
+
+        return cleaned
 
 
 class InvoiceLineItemForm(forms.ModelForm):

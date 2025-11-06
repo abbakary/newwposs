@@ -257,15 +257,16 @@
             <p class="mb-0">{{ invoice.notes }}</p>
           </div>
           {% endif %}
-          {% if invoice.terms %}
           <div>
             <label class="form-label mb-1"><small class="text-muted">Terms</small></label>
-            <p class="mb-0">{{ invoice.terms }}</p>
+            <p class="mb-0">
+              {% if invoice.terms %}
+                {{ invoice.terms }}
+              {% else %}
+                NOTE 1 : Payment in TSHS accepted at the prevailing rate on the date of payment. 2 : Proforma Invoice is Valid for 2 weeks from date of Proforma. 3 : Discount is Valid only for the above Quantity. 4 : Duty and VAT exemption documents to be submitted with the Purchase Order.
+              {% endif %}
+            </p>
           </div>
-          {% endif %}
-          {% if not invoice.notes and not invoice.terms %}
-          <p class="text-muted mb-0">No notes or terms added.</p>
-          {% endif %}
         </div>
       </div>
     </div>

@@ -175,5 +175,6 @@ urlpatterns = [
     path("invoices/<int:pk>/cancel/", views_invoice.invoice_cancel, name="invoice_cancel"),
     path("invoices/", views_invoice.invoice_list, name="invoice_list"),
     path("invoices/order/<int:order_id>/", views_invoice.invoice_list, name="invoice_list_for_order"),
+    path("api/invoices/recent/", views_invoice.api_recent_invoices, name="api_invoices_recent"),
     path("api/invoices/inventory/", views_invoice.api_inventory_for_invoice, name="api_invoices_inventory"),
 ]

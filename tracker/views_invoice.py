@@ -34,20 +34,88 @@ def invoice_create(request, order_id=None):
         vehicle = order.vehicle
     
     if request.method == 'POST':
-        form = InvoiceForm(request.POST)
+        try:
+            form = InvoiceForm(request.POST, user=request.user)
+        except TypeError:
+            # Fallback for older code / forms that don't accept user kwarg
+            form = InvoiceForm(request.POST)
         if form.is_valid():
+            cd = form.cleaned_data
+            # Resolve or create customer
+            customer_obj = None
+            try:
+                if cd.get('existing_customer'):
+                    customer_obj = cd.get('existing_customer')
+                else:
+                    name = (cd.get('customer_full_name') or '').strip()
+                    phone = (cd.get('customer_phone') or '').strip()
+                    whatsapp = (cd.get('customer_whatsapp') or '').strip()
+                    email = (cd.get('customer_email') or '').strip()
+                    address = (cd.get('customer_address') or '').strip()
+                    org = (cd.get('customer_organization_name') or '').strip()
+                    tax = (cd.get('customer_tax_number') or '').strip()
+                    ctype = cd.get('customer_type') or None
+
+                    if name:
+                        from django.db import IntegrityError
+                        from .utils import get_user_branch as _get_user_branch
+                        branch = _get_user_branch(request.user)
+                        personal_sub = cd.get('customer_personal_subtype') or None
+                        try:
+                            customer_obj = Customer.objects.create(
+                                full_name=name,
+                                phone=phone or '',
+                                whatsapp=whatsapp or None,
+                                email=email or None,
+                                address=address or None,
+                                organization_name=org or None,
+                                tax_number=tax or None,
+                                customer_type=ctype or None,
+                                personal_subtype=personal_sub,
+                                branch=branch,
+                            )
+                        except IntegrityError:
+                            # If unique constraint prevents creation, try to fetch an existing record matching key fields
+                            customer_obj = Customer.objects.filter(branch=branch, full_name__iexact=name, phone=phone).first()
+                            if not customer_obj:
+                                # As a last resort, attempt to get by name only
+                                customer_obj = Customer.objects.filter(branch=branch, full_name__iexact=name).first()
+            except Exception as e:
+                logger.warning(f"Failed to resolve or create customer while creating invoice: {e}")
+
+            # Fallback to provided customer from order if none resolved
+            if not customer_obj:
+                customer_obj = customer
+
             invoice = form.save(commit=False)
             invoice.branch = get_user_branch(request.user)
             if order:
                 invoice.order = order
-            invoice.customer = customer
+            invoice.customer = customer_obj
             invoice.vehicle = vehicle
             invoice.created_by = request.user
             invoice.generate_invoice_number()
+            # Ensure Terms & Conditions (NOTE) is prefilled if missing
+            try:
+                if not getattr(invoice, 'terms', None):
+                    invoice.terms = (
+                        "NOTE 1 : Payment in TSHS accepted at the prevailing rate on the date of payment. "
+                        "2 : Proforma Invoice is Valid for 2 weeks from date of Proforma. "
+                        "3 : Discount is Valid only for the above Quantity. "
+                        "4 : Duty and VAT exemption documents to be submitted with the Purchase Order."
+                    )
+            except Exception:
+                pass
             invoice.save()
             # If this invoice was created from an order and service selection/ETA provided, update the order for tracking
             try:
                 if order:
+                    # Keep order's customer in sync with the customer chosen/created on the invoice
+                    try:
+                        if customer_obj and order.customer_id != getattr(customer_obj, 'id', None):
+                            order.customer = customer_obj
+                    except Exception:
+                        pass
                     sel = request.POST.get('service_selection')
                     est = request.POST.get('estimated_duration')
                     if sel:
@@ -79,8 +147,18 @@ def invoice_create(request, order_id=None):
             messages.success(request, f'Invoice {invoice.invoice_number} created successfully.')
             return redirect('tracker:invoice_detail', pk=invoice.pk)
     else:
-        form = InvoiceForm()
-    
+        initial = {}
+        if order:
+            # Auto-fill reference with vehicle plate if available, fallback to order.order_number
+            if vehicle and getattr(vehicle, 'plate_number', None):
+                initial['reference'] = vehicle.plate_number
+            else:
+                initial['reference'] = order.order_number
+        try:
+            form = InvoiceForm(user=request.user, initial=initial)
+        except TypeError:
+            form = InvoiceForm(initial=initial)
+
     return render(request, 'tracker/invoice_create.html', {
         'form': form,
         'order': order,
@@ -174,7 +252,7 @@ def invoice_print(request, pk):
 
 
 @login_required
-@require_http_methods(["POST"])
+@require_http_methods(["GET","POST"])
 def invoice_pdf(request, pk):
     """Generate and download invoice as PDF"""
     invoice = get_object_or_404(Invoice, pk=pk)
@@ -219,7 +297,44 @@ def api_inventory_for_invoice(request):
         return JsonResponse({'items': data})
     except Exception as e:
         logger.error(f"Error fetching inventory items: {e}")
-        return JsonResponse({'items': [], 'error': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["GET"])
+def api_recent_invoices(request):
+    """Return JSON list of recent invoices for sidebar"""
+    try:
+        from .utils import get_user_branch
+        from django.urls import reverse
+        branch = get_user_branch(request.user)
+        qs = Invoice.objects.select_related('customer').order_by('-invoice_date')
+        if branch:
+            qs = qs.filter(branch=branch)
+        invoices = qs[:8]
+        data = []
+        for inv in invoices:
+            try:
+                detail = reverse('tracker:invoice_detail', kwargs={'pk': inv.id})
+                prn = reverse('tracker:invoice_print', kwargs={'pk': inv.id})
+                pdf = reverse('tracker:invoice_pdf', kwargs={'pk': inv.id})
+            except Exception:
+                detail = f"/invoices/{inv.id}/"
+                prn = f"/invoices/{inv.id}/print/"
+                pdf = f"/invoices/{inv.id}/pdf/"
+            data.append({
+                'id': inv.id,
+                'invoice_number': inv.invoice_number,
+                'customer_name': inv.customer.full_name if inv.customer else '',
+                'total_amount': float(inv.total_amount or 0),
+                'status': inv.status,
+                'detail_url': detail,
+                'print_url': prn,
+                'pdf_url': pdf,
+            })
+        return JsonResponse({'invoices': data})
+    except Exception as e:
+        logger.error(f"Error fetching recent invoices: {e}")
+        return JsonResponse({'invoices': []})
 
 
 @login_required

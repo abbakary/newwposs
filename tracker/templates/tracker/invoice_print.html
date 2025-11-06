@@ -4,7 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Invoice {{ invoice.invoice_number }}</title>
+  {% load humanize %}
+  {% load static %}
   <style>
+    @page { size: A4 landscape; margin: 12mm; }
+    :root{ --company-yellow: #ffd400; --text-dark:#222 }
     * {
       margin: 0;
       padding: 0;
@@ -17,49 +21,47 @@
       color: #333;
       background: white;
       padding: 20px;
+      position: relative;
+      min-height: 100vh;
     }
 
     .invoice-container {
-      max-width: 900px;
+      position: relative;
+      max-width: 820px; /* reduced width */
       margin: 0 auto;
       background: white;
-      padding: 40px;
+      padding: 18px 24px 18px 24px;
       border: 1px solid #e0e0e0;
+      min-height: 180mm;
     }
 
     /* Header */
-    .invoice-header {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 40px;
-      margin-bottom: 40px;
-      border-bottom: 2px solid #007bff;
-      padding-bottom: 20px;
-    }
+    .invoice-header { margin-bottom: 10px; padding-bottom: 8px; border-bottom: 2px solid #ccc; }
+    .topbar { background:#f1f1f1; border:1px solid #e0e0e0; padding:8px 12px; margin-bottom:8px; }
+    .topbar h1 { font-size:18px; font-style: italic; margin:0; color:#333; }
+    .topbar .sub { font-size:10px; color:#555; margin-top:2px; }
+    .titlebar { text-align:center; font-size:20px; font-weight:800; color:#007bff; margin:6px 0 10px 0; }
+
+    .header-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; align-items: start; }
+    .header-left label, .header-right label { display: inline-block; width: 140px; color: #666; }
+    .header-left .row, .header-right .row { display: flex; justify-content: space-between; margin: 2px 0; font-size: 12px; }
+    .header-right .title { display:none; }
 
     .company-info h2 {
-      font-size: 20px;
-      color: #007bff;
-      margin-bottom: 10px;
-      font-weight: 700;
+      font-size: 18px;
+      color: var(--text-dark);
+      margin-bottom: 6px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
     }
 
     .company-info p {
-      font-size: 12px;
-      margin: 3px 0;
-      color: #555;
+      font-size: 11px;
+      margin: 2px 0;
+      color: var(--text-dark);
     }
 
-    .invoice-info {
-      text-align: right;
-      font-size: 12px;
-    }
-
-    .invoice-info h3 {
-      font-size: 24px;
-      color: #007bff;
-      margin-bottom: 10px;
-    }
+    .invoice-info { text-align: left; font-size: 12px; }
 
     .invoice-info-row {
       display: flex;
@@ -72,13 +74,7 @@
       color: #333;
     }
 
-    /* Customer Section */
-    .customer-section {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 40px;
-      margin-bottom: 40px;
-    }
+    .greeting { font-size: 12px; margin: 8px 0 10px 0; }
 
     .customer-block {
       font-size: 12px;
@@ -101,7 +97,7 @@
     .items-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 30px;
+      margin-bottom: 16px;
       font-size: 12px;
     }
 
@@ -144,41 +140,18 @@
       background-color: #f9f9f9;
     }
 
-    /* Totals */
-    .totals-section {
-      display: flex;
-      justify-content: flex-end;
-      margin-bottom: 40px;
-      font-size: 12px;
-    }
-
-    .totals-box {
-      width: 300px;
-    }
-
-    .totals-row {
-      display: flex;
-      justify-content: space-between;
-      padding: 8px 0;
-      border-bottom: 1px solid #e0e0e0;
-    }
-
-    .totals-row.total {
-      border-top: 2px solid #007bff;
-      border-bottom: 2px solid #007bff;
-      font-weight: 700;
-      font-size: 14px;
-      padding: 10px 0;
-      color: #007bff;
-    }
-
-    .totals-row strong {
-      color: #333;
-    }
-
-    .totals-row.total strong {
-      color: #007bff;
-    }
+    /* Footer Blocks (left column) */
+    .footer-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; font-size: 12px; }
+    .left-blocks .block { margin-bottom: 10px; }
+    .left-blocks .block h4 { font-size: 12px; text-transform: uppercase; margin-bottom: 4px; }
+    .left-blocks .block p { margin: 2px 0; }
+    .kv-row { display:flex; gap:8px; align-items: baseline; }
+    .kv-row .label { min-width: 80px; font-weight:600; }
+    .kv-row .sep { margin-right:6px; }
+    .remarks { font-style: italic; }
+    .totals-box { border-left: 2px solid #007bff; padding-left: 12px; }
+    .totals-row { display:flex; justify-content: space-between; padding: 6px 0; }
+    .totals-row.total { font-weight: 700; color: #007bff; border-top: 2px solid #007bff; margin-top: 6px; padding-top: 8px; }
 
     /* Payment Section */
     .payment-notes-section {
@@ -214,6 +187,29 @@
       border-top: 1px solid #e0e0e0;
     }
 
+    /* Logo positioning */
+    .logo-container {
+      position: absolute;
+      bottom: 20px;
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      padding: 0 24px;
+      left: 0;
+    }
+
+    .logo-left, .logo-right {
+      height: 60px;
+      display: flex;
+      align-items: center;
+    }
+
+    .logo-left img, .logo-right img {
+      max-height: 100%;
+      max-width: 150px;
+      object-fit: contain;
+    }
+
     /* Print Styles */
     @media print {
       body {
@@ -229,6 +225,11 @@
 
       .no-print {
         display: none;
+      }
+      
+      .logo-container {
+        position: fixed;
+        bottom: 10mm;
       }
     }
 
@@ -250,153 +251,118 @@
   {% endif %}
 
   <div class="invoice-container">
-    <!-- Header with Company Info and Invoice Number -->
+    <!-- Top horizontal company bar -->
+    <div class="topbar" style="color: #ffbb00d0;">
+      <h1 >Superdoll Trailer Manufacture Co. (T) Ltd.</h1>
+      <div class="sub">P.O. Box 16541 DSM, Tel.+255-22-2860930-2863467, Fax +255-22-2865412/3, Email: stm@superdoll-tz.com, Tax ID No.100-199-157, VAT Reg. No.10-0085-15-E </div>
+    </div>
+
+    <!-- Centered title -->
+    <div class="titlebar" style="color: #ffa600;">Proforma Invoice</div>
+
+    <!-- Header: two-column metadata -->
     <div class="invoice-header">
-      <div class="company-info">
-        <h2>SUPERDOLL TRAILER MANUFACTURE CO. (T) LTD.</h2>
-        <p>P.O. Box 16541 DSM, Tanzania</p>
-        <p>Tel: +255-22-2860930-2863467</p>
-        <p>Fax: +255-22-2865412/3</p>
-        <p>Email: stm@superdoll-tz.com</p>
-        <p>Tax ID No. 100-199-157</p>
-        <p>VAT Reg. No. 10-0085-15-E</p>
-      </div>
-      <div class="invoice-info">
-        <h3>INVOICE</h3>
-        <div class="invoice-info-row">
-          <strong>Invoice #:</strong>
-          <span>{{ invoice.invoice_number }}</span>
+      <div class="header-grid">
+        <div class="header-left">
+          <div class="row"><label>Code No:</label><span>{{ invoice.customer.code|default:invoice.customer.id }}</span></div>
+          <div class="row"><label>Customer Name:</label><span>{{ invoice.customer.full_name }}</span></div>
+          <div class="row"><label>Address:</label><span>{{ invoice.customer.address|default:"" }}</span></div>
+          <div class="row"><label>Tel:</label><span>{{ invoice.customer.phone|default:"" }}</span></div>
+          <div class="row"><label>Fax:</label><span>{{ invoice.customer.tax_number|default:"" }}</span></div>
+          <div class="row"><label>Attended By:</label><span>{{ invoice.attended_by|default:"" }}</span></div>
+          <div class="row"><label>Kind Attn:</label><span>{{ invoice.kind_attention|default:"" }}</span></div>
+          <div class="row"><label>Reference (Plate):</label><span>{% if invoice.vehicle %}{{ invoice.vehicle.plate_number }}{% else %}{{ invoice.reference|default:'—' }}{% endif %}</span></div>
         </div>
-        <div class="invoice-info-row">
-          <strong>Date:</strong>
-          <span>{{ invoice.invoice_date|date:"d/m/Y" }}</span>
+        <div class="header-right">
+          <div class="invoice-info">
+            <div class="row"><label>PI No:</label><span>{{ invoice.invoice_number }}</span></div>
+            <div class="row"><label>Date:</label><span>{{ invoice.invoice_date|date:"d/m/Y" }}</span></div>
+            {% if invoice.due_date %}<div class="row"><label>Due Date:</label><span>{{ invoice.due_date|date:"d/m/Y" }}</span></div>{% endif %}
+            <div class="row"><label>Page:</label><span>1/1</span></div>
+          </div>
         </div>
-        {% if invoice.due_date %}
-        <div class="invoice-info-row">
-          <strong>Due Date:</strong>
-          <span>{{ invoice.due_date|date:"d/m/Y" }}</span>
-        </div>
-        {% endif %}
-        {% if invoice.reference %}
-        <div class="invoice-info-row">
-          <strong>Reference:</strong>
-          <span>{{ invoice.reference }}</span>
-        </div>
-        {% endif %}
       </div>
     </div>
 
-    <!-- Customer Information -->
-    <div class="customer-section">
-      <div class="customer-block">
-        <h4>Bill To:</h4>
-        <p><strong>{{ invoice.customer.full_name }}</strong></p>
-        {% if invoice.customer.organization_name %}
-        <p>{{ invoice.customer.organization_name }}</p>
-        {% endif %}
-        <p>{{ invoice.customer.phone }}</p>
-        {% if invoice.customer.email %}
-        <p>{{ invoice.customer.email }}</p>
-        {% endif %}
-        {% if invoice.customer.address %}
-        <p>{{ invoice.customer.address }}</p>
-        {% endif %}
-      </div>
-
-      {% if invoice.vehicle %}
-      <div class="customer-block">
-        <h4>Vehicle Information:</h4>
-        <p><strong>Plate Number:</strong> {{ invoice.vehicle.plate_number }}</p>
-        <p><strong>Make:</strong> {{ invoice.vehicle.make|default:"—" }}</p>
-        <p><strong>Model:</strong> {{ invoice.vehicle.model|default:"—" }}</p>
-        <p><strong>Type:</strong> {{ invoice.vehicle.vehicle_type|default:"—" }}</p>
-      </div>
-      {% endif %}
-    </div>
+    <div class="greeting">Dear Sir/Madam, We thank you for your valued enquiry. As desired please find below our detailed best offer.</div>
 
     <!-- Line Items Table -->
     {% if invoice.line_items.all %}
     <table class="items-table">
       <thead>
         <tr>
+          <th style="width:30px;">Sr</th>
+          <th style="width:90px;">Item Code</th>
           <th>Description</th>
-          <th class="text-right">Qty</th>
-          <th class="text-right">Unit</th>
-          <th class="text-right">Unit Price</th>
-          <th class="text-right">Total</th>
+          <th style="width:60px;">Type</th>
+          <th class="text-right" style="width:60px;">Qty</th>
+          <th class="text-right" style="width:60px;">Unit</th>
+          <th class="text-right" style="width:100px;">Rate TSH</th>
+          <th class="text-right" style="width:110px;">Value TSH</th>
         </tr>
       </thead>
       <tbody>
         {% for item in invoice.line_items.all %}
         <tr>
+          <td>{{ forloop.counter }}</td>
+          <td>{{ item.inventory_item.sku|default:"" }}</td>
           <td><strong>{{ item.description }}</strong></td>
+          <td>{{ item.unit|default:item.get_item_type_display }}</td>
           <td class="text-right">{{ item.quantity }}</td>
           <td class="text-right">{{ item.unit|default:"—" }}</td>
-          <td class="text-right">{{ item.unit_price|floatformat:2 }}</td>
-          <td class="text-right"><strong>{{ item.line_total|floatformat:2 }}</strong></td>
+          <td class="text-right">{{ item.unit_price|floatformat:2|intcomma }}</td>
+          <td class="text-right"><strong>{{ item.line_total|floatformat:2|intcomma }}</strong></td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
     {% endif %}
 
-    <!-- Totals -->
-    <div class="totals-section">
+    <!-- Footer blocks: left info + totals on right -->
+    <div class="footer-grid">
+      <div class="left-blocks">
+        <div class="block">
+          <div class="kv-row"><span class="label">Payment</span><span class="sep">:</span><span>{% if invoice.payment %}{{ invoice.payment.get_payment_method_display }}{% else %}Cash/Chq on Delivery{% endif %}</span></div>
+        </div>
+        <div class="block">
+          <div class="kv-row"><span class="label">Delivery</span><span class="sep">:</span><span>ex-stock</span></div>
+        </div>
+        <div class="block">
+          <div class="kv-row"><span class="label">Remarks</span><span class="sep">:</span><span class="remarks">Looking forward to your confirmed order</span></div>
+        </div>
+        <div class="block" style="margin-top: 10px;">
+          <p style="font-size:12px; margin:0 0 2px 0;"><strong>NOTE 1 :</strong> <em>Payment in TSHS accepted at the prevailing rate on the date of payment.</em></p>
+          <p style="font-size:12px; margin:0 0 2px 0;">&nbsp;&nbsp;<strong>2 :</strong> <em>Proforma Invoice is Valid for 2 weeks from date of Proforma.</em></p>
+          <p style="font-size:12px; margin:0 0 2px 0;">&nbsp;&nbsp;<strong>3 :</strong> <em>Discount is Valid only for the above Quantity.</em></p>
+          <p style="font-size:12px; margin:0 0 2px 0;">&nbsp;&nbsp;<strong>4 :</strong> <em>Duty and VAT exemption documents to be submitted with the Purchase Order.</em></p>
+        </div>
+        <div class="block" style="margin-top: 18px;">
+          <h4>Authorised Signatory</h4>
+          <p style="margin-top: 24px;">______________________________</p>
+        </div>
+      </div>
       <div class="totals-box">
-        <div class="totals-row">
-          <strong>Subtotal:</strong>
-          <span>{{ invoice.subtotal|floatformat:2 }}</span>
-        </div>
-        {% if invoice.tax_rate > 0 %}
-        <div class="totals-row">
-          <strong>Tax ({{ invoice.tax_rate }}%):</strong>
-          <span>{{ invoice.tax_amount|floatformat:2 }}</span>
-        </div>
-        {% endif %}
-        <div class="totals-row total">
-          <strong>TOTAL:</strong>
-          <span>{{ invoice.total_amount|floatformat:2 }}</span>
-        </div>
+        <div class="totals-row"><strong>Net Value :</strong><span>{{ invoice.subtotal|floatformat:2|intcomma }} TSH</span></div>
+        <div class="totals-row"><strong>VAT :</strong><span>{{ invoice.tax_amount|floatformat:2|intcomma }} TSH</span></div>
+        <div class="totals-row total"><strong>Gross Value : TSH</strong><span>{{ invoice.total_amount|floatformat:2|intcomma }}</span></div>
       </div>
     </div>
 
-    <!-- Payment and Notes -->
-    <div class="payment-notes-section">
-      {% if invoice.payment %}
-      <div class="payment-block">
-        <h4>Payment Details:</h4>
-        <p><strong>Method:</strong> {{ invoice.payment.get_payment_method_display }}</p>
-        <p><strong>Amount:</strong> {{ invoice.payment.amount|floatformat:2 }}</p>
-        {% if invoice.payment.payment_date %}
-        <p><strong>Date:</strong> {{ invoice.payment.payment_date|date:"d/m/Y" }}</p>
-        {% endif %}
-        {% if invoice.payment.reference %}
-        <p><strong>Reference:</strong> {{ invoice.payment.reference }}</p>
-        {% endif %}
-        {% if invoice.payment.notes %}
-        <p><strong>Notes:</strong> {{ invoice.payment.notes }}</p>
-        {% endif %}
-      </div>
-      {% endif %}
-
-      {% if invoice.notes or invoice.terms %}
-      <div class="notes-block">
-        {% if invoice.notes %}
-        <h4>Notes:</h4>
-        <p>{{ invoice.notes }}</p>
-        {% endif %}
-        {% if invoice.terms %}
-        <h4 style="margin-top: 20px;">Terms & Conditions:</h4>
-        <p>{{ invoice.terms }}</p>
-        {% endif %}
-      </div>
-      {% endif %}
-    </div>
-
-    <!-- Footer -->
+    <!-- Authorised Signatory / Footer -->
     <div class="invoice-footer">
-      <p>Thank you for your business!</p>
+      <p><strong>Authorised Signatory</strong></p>
+      <p>______________________________</p>
       <p>Generated on {{ "now"|date:"d/m/Y H:i" }}</p>
+    </div>
+
+    <!-- Logos at the bottom -->
+    <div class="logo-container">
+      <div class="logo-left">
+        <img src="{% static 'assets/images/logo/stm_logo.png' %}" alt="STM Logo">
+      </div>
+      <div class="logo-right">
+        <img src="{% static 'assets/images/logo/wecare.png' %}" alt="WeCare Logo">
+      </div>
     </div>
   </div>
 </body>

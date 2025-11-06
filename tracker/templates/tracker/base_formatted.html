@@ -357,12 +357,33 @@
                                     </a>
                                     <ul class="sidebar-submenu">
                                         <li><a href="{% url 'tracker:reports' %}"> Reports Overview</a></li>
-                           
+
                                     </ul>
                                 </li>
-                                
-                              
-                                
+
+                                <!-- Invoices -->
+                                <li class="sidebar-list">
+                                    <i class="fa fa-file-invoice"></i>
+                                    <a class="sidebar-link sidebar-title" href="#">
+                                        <svg class="stroke-icon">
+                                            <use href="{% static 'assets/svg/icon-sprite.svg' %}#stroke-file"></use>
+                                        </svg>
+                                        <span>Invoices</span>
+                                    </a>
+                                    <ul class="sidebar-submenu">
+                                        <li><a href="{% url 'tracker:invoice_list' %}">All Invoices</a></li>
+                                        <li><a href="{% url 'tracker:invoice_create' %}">Create Invoice</a></li>
+                                        <li>
+                                          <div class="p-2">
+                                            <small class="text-muted">Recent Invoices</small>
+                                            <ul class="list-unstyled mb-0" id="recentInvoicesList"></ul>
+                                          </div>
+                                        </li>
+                                    </ul>
+                                </li>
+
+
+
                                 <!-- System -->
                                 {% if user.is_superuser %}
                                 <li class="sidebar-list">
@@ -421,7 +442,28 @@
     <script src="{% static 'assets/js/header-slick.js' %}"></script>
     <script src="{% static 'assets/js/script.js' %}"></script>
     <script src="{% static 'js/phone_validation.js' %}"></script>
-    
+
+    <script>
+      document.addEventListener('DOMContentLoaded', function(){
+        var list = document.getElementById('recentInvoicesList');
+        if (!list) return;
+        fetch('/api/invoices/recent/', { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(r=>r.json()).then(data=>{
+            data.invoices.forEach(function(inv){
+              var li = document.createElement('li');
+              li.className = 'mb-2';
+              li.innerHTML = '<div class="d-flex justify-content-between align-items-center">'
+                +'<div><a href="'+inv.detail_url+'">'+inv.invoice_number+'<br><small class="text-muted">'+inv.customer_name+'</small></a></div>'
+                +'<div class="btn-group btn-group-sm ms-2">'
+                +'<a class="btn btn-outline-secondary btn-sm" href="'+inv.print_url+'" target="_blank" title="Print"><i class="fa fa-print"></i></a>'
+                +'<a class="btn btn-outline-secondary btn-sm" href="'+inv.pdf_url+'" title="Download PDF"><i class="fa fa-download"></i></a>'
+                +'</div></div>';
+              list.appendChild(li);
+            });
+          }).catch(function(){/* ignore */});
+      });
+    </script>
+
     <!-- Notification initialization -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
