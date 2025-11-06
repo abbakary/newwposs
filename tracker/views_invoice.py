@@ -49,37 +49,28 @@ def invoice_create(request, order_id=None):
                 else:
                     name = (cd.get('customer_full_name') or '').strip()
                     phone = (cd.get('customer_phone') or '').strip()
-                    whatsapp = (cd.get('customer_whatsapp') or '').strip()
-                    email = (cd.get('customer_email') or '').strip()
-                    address = (cd.get('customer_address') or '').strip()
-                    org = (cd.get('customer_organization_name') or '').strip()
-                    tax = (cd.get('customer_tax_number') or '').strip()
-                    ctype = cd.get('customer_type') or None
 
-                    if name:
-                        from django.db import IntegrityError
+                    if name and phone:
                         from .utils import get_user_branch as _get_user_branch
+                        from .services import CustomerService
                         branch = _get_user_branch(request.user)
-                        personal_sub = cd.get('customer_personal_subtype') or None
+
                         try:
-                            customer_obj = Customer.objects.create(
-                                full_name=name,
-                                phone=phone or '',
-                                whatsapp=whatsapp or None,
-                                email=email or None,
-                                address=address or None,
-                                organization_name=org or None,
-                                tax_number=tax or None,
-                                customer_type=ctype or None,
-                                personal_subtype=personal_sub,
+                            customer_obj, _ = CustomerService.create_or_get_customer(
                                 branch=branch,
+                                full_name=name,
+                                phone=phone,
+                                whatsapp=(cd.get('customer_whatsapp') or '').strip() or None,
+                                email=(cd.get('customer_email') or '').strip() or None,
+                                address=(cd.get('customer_address') or '').strip() or None,
+                                organization_name=(cd.get('customer_organization_name') or '').strip() or None,
+                                tax_number=(cd.get('customer_tax_number') or '').strip() or None,
+                                customer_type=cd.get('customer_type') or None,
+                                personal_subtype=cd.get('customer_personal_subtype') or None,
                             )
-                        except IntegrityError:
-                            # If unique constraint prevents creation, try to fetch an existing record matching key fields
-                            customer_obj = Customer.objects.filter(branch=branch, full_name__iexact=name, phone=phone).first()
-                            if not customer_obj:
-                                # As a last resort, attempt to get by name only
-                                customer_obj = Customer.objects.filter(branch=branch, full_name__iexact=name).first()
+                        except Exception as e:
+                            logger.warning(f"Failed to create/get customer while creating invoice: {e}")
+                            customer_obj = None
             except Exception as e:
                 logger.warning(f"Failed to resolve or create customer while creating invoice: {e}")
 
