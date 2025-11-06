@@ -1379,20 +1379,28 @@ def customer_register(request: HttpRequest):
                     branch_name = getattr(other_branch, 'name', other_branch) if other_branch else 'another branch'
                     messages.warning(request, f"A customer with the same identity exists in {branch_name}. A separate customer will be created for your branch.")
 
-                # Create new customer
-                c = Customer.objects.create(
-                    full_name=full_name,
-                    phone=phone,
-                    whatsapp=data.get("whatsapp"),
-                    email=data.get("email"),
-                    address=data.get("address"),
-                    notes=data.get("notes") or data.get("additional_notes"),
-                    customer_type=data.get("customer_type"),
-                    organization_name=org_name,
-                    tax_number=tax_num,
-                    personal_subtype=data.get("personal_subtype"),
-                    branch=user_branch,
-                )
+                # Create new customer using centralized service
+                from .services import CustomerService
+                try:
+                    c, _ = CustomerService.create_or_get_customer(
+                        branch=user_branch,
+                        full_name=full_name,
+                        phone=phone,
+                        whatsapp=data.get("whatsapp"),
+                        email=data.get("email"),
+                        address=data.get("address"),
+                        notes=data.get("notes") or data.get("additional_notes"),
+                        customer_type=data.get("customer_type"),
+                        organization_name=org_name,
+                        tax_number=tax_num,
+                        personal_subtype=data.get("personal_subtype"),
+                    )
+                except Exception as e:
+                    logger.warning(f"Error creating customer at step 4: {e}")
+                    if is_ajax:
+                        return json_response(False, form=form, message="Error creating customer", message_type="error")
+                    messages.error(request, "Error creating customer")
+                    return render(request, "tracker/customer_register.html", get_template_context(4, form))
                 
                 # Create vehicle if vehicle information is provided
                 v = None
