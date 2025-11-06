@@ -71,23 +71,39 @@ def api_start_order(request):
                 }
             }, status=200)
 
+        from .services import CustomerService, VehicleService
+
         with transaction.atomic():
             # Decide which customer to use
             if use_existing and existing_customer_id:
                 customer = get_object_or_404(Customer, id=existing_customer_id, branch=user_branch)
                 # Try to find a matching vehicle record for this plate under that customer
-                vehicle = Vehicle.objects.filter(plate_number__iexact=plate_number, customer=customer).first()
-                if not vehicle:
-                    vehicle = Vehicle.objects.create(customer=customer, plate_number=plate_number)
-            else:
-                # Create temporary customer record for this branch
-                customer, _ = Customer.objects.get_or_create(
-                    branch=user_branch,
-                    phone=f"TEMP_{plate_number}",
-                    defaults={'full_name': f'Pending - {plate_number}', 'customer_type': 'personal'}
+                vehicle = VehicleService.create_or_get_vehicle(
+                    customer=customer,
+                    plate_number=plate_number
                 )
-                vehicle, _ = Vehicle.objects.get_or_create(customer=customer, plate_number=plate_number,
-                                                            defaults={'vehicle_type':'', 'make':'', 'model':''})
+            else:
+                # Create or get temporary customer record for this branch using the service
+                # This avoids duplicate "Pending - T XXX" records
+                try:
+                    customer, _ = CustomerService.create_or_get_customer(
+                        branch=user_branch,
+                        full_name=f"Plate {plate_number}",
+                        phone=f"PLATE_{plate_number}",  # Use plate as identifier instead of "TEMP_"
+                        customer_type='personal',
+                    )
+                except Exception:
+                    # Fallback if service fails
+                    customer, _ = Customer.objects.get_or_create(
+                        branch=user_branch,
+                        phone=f"PLATE_{plate_number}",
+                        defaults={'full_name': f'Plate {plate_number}', 'customer_type': 'personal'}
+                    )
+
+                vehicle = VehicleService.create_or_get_vehicle(
+                    customer=customer,
+                    plate_number=plate_number
+                )
 
             # Calculate estimated duration from selected services if provided
             try:
