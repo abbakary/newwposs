@@ -519,39 +519,29 @@ def api_started_orders_kpis(request):
     """API endpoint to get KPI stats for started orders dashboard (for AJAX updates)."""
     try:
         user_branch = get_user_branch(request.user)
-        
-        # Exclude orders with temporary customers (those with full_name starting with "Plate " and phone starting with "PLATE_")
+
+        # Include all started orders for accurate KPI counts
         total_started = Order.objects.filter(
             branch=user_branch,
             status='created'
-        ).exclude(
-            customer__full_name__startswith='Plate ',
-            customer__phone__startswith='PLATE_'
         ).count()
-        
+
         today_started = Order.objects.filter(
             branch=user_branch,
             status='created',
             started_at__date=timezone.now().date()
-        ).exclude(
-            customer__full_name__startswith='Plate ',
-            customer__phone__startswith='PLATE_'
         ).count()
-        
+
         # Calculate repeated vehicles today (vehicles with 2+ orders started today)
-        # Exclude orders with temporary customers
         from django.db.models import Count
         today_orders = Order.objects.filter(
             branch=user_branch,
             status='created',
             started_at__date=timezone.now().date(),
             vehicle__isnull=False
-        ).exclude(
-            customer__full_name__startswith='Plate ',
-            customer__phone__startswith='PLATE_'
         ).values('vehicle__plate_number').annotate(order_count=Count('id')).filter(order_count__gte=2)
         repeated_vehicles_today = today_orders.count()
-        
+
         return JsonResponse({
             'success': True,
             'total_started': total_started,
