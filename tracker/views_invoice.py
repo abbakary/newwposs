@@ -519,16 +519,64 @@ def api_create_invoice_from_extraction(request):
         # Create invoice instance
         invoice = Invoice()
         invoice.branch = user_branch
+
+        # If no order provided, try to use extracted fields to create customer/order
+        extracted_customer = data.get('extracted_customer')
+        extracted_phone = data.get('extracted_phone')
+        extracted_plate = data.get('extracted_plate')
+        extracted_description = data.get('extracted_description')
+
+        # Create or fetch order/customer/vehicle when order not provided
+        if order is None:
+            try:
+                # Find existing customer by phone within branch
+                customer = None
+                if extracted_phone:
+                    customer = Customer.objects.filter(branch=user_branch, phone__iexact=extracted_phone).first()
+                if not customer and extracted_customer:
+                    customer = Customer.objects.filter(branch=user_branch, full_name__iexact=extracted_customer).first()
+                if not customer:
+                    # Create minimal customer
+                    customer = Customer.objects.create(
+                        branch=user_branch,
+                        full_name=extracted_customer or f'Guest {extracted_plate or ""}',
+                        phone=extracted_phone or f'PLATE_{(extracted_plate or "").upper()}',
+                        customer_type='personal'
+                    )
+                # Create/get vehicle
+                vehicle = None
+                if extracted_plate:
+                    vehicle, _ = Vehicle.objects.get_or_create(customer=customer, plate_number=extracted_plate)
+                else:
+                    vehicle = None
+
+                # Create order
+                order = Order.objects.create(
+                    customer=customer,
+                    vehicle=vehicle,
+                    branch=user_branch,
+                    type='service',
+                    status='created',
+                    started_at=timezone.now(),
+                    description=extracted_description or f'Order from extracted invoice {extraction_id}',
+                    priority='medium'
+                )
+            except Exception as e:
+                logger.warning(f"Failed to auto-create order/customer from extraction: {e}", exc_info=True)
+
+        # Link invoice to order/customer/vehicle if present
         if order:
             invoice.order = order
-            # Prefer order's customer/vehicle when available
             invoice.customer = order.customer
             invoice.vehicle = order.vehicle
-        # Fill fields from provided data
+
+        # Fill reference
         if reference:
             invoice.reference = reference
         else:
-            if order and order.vehicle and getattr(order.vehicle, 'plate_number', None):
+            if invoice.customer and getattr(invoice.customer, 'full_name', None):
+                invoice.reference = invoice.customer.full_name[:64]
+            elif order and order.vehicle and getattr(order.vehicle, 'plate_number', None):
                 invoice.reference = order.vehicle.plate_number
             elif order:
                 invoice.reference = order.order_number
@@ -580,6 +628,12 @@ def api_create_invoice_from_extraction(request):
                 line.save()
         except Exception as e:
             logger.warning(f"Failed to create extracted line items: {e}")
+
+        # Recalculate invoice totals after creating line items
+        try:
+            invoice.calculate_totals().save()
+        except Exception:
+            pass
 
         return JsonResponse({'success': True, 'invoice_id': invoice.id})
     except json.JSONDecodeError:
