@@ -118,11 +118,6 @@ function submitStartOrder(event) {
     return;
   }
 
-  // Gather selected services
-  const svcBoxes = document.querySelectorAll('#startOrderServices input[type="checkbox"]:checked');
-  const services = Array.from(svcBoxes).map(cb => cb.value);
-  const estimatedDuration = document.getElementById('startOrderEstimatedDuration').value || null;
-
   // Check plate result choices
   const plateCheckEl = document.getElementById('plateCheckResult');
   let useExisting = false;
