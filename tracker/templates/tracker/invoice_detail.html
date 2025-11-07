@@ -136,6 +136,7 @@
             <table class="table table-sm table-hover mb-0">
               <thead class="table-light">
                 <tr>
+                  {% if forloop.first %}{% for item in invoice.line_items.all %}{% if item.code %}<th style="width: 80px;">Code</th>{% endif %}{% break %}{% endfor %}{% endif %}
                   <th>Description</th>
                   <th style="width: 100px;" class="text-end">Qty</th>
                   <th style="width: 120px;" class="text-end">Unit Price</th>
@@ -147,6 +148,7 @@
               <tbody>
                 {% for item in invoice.line_items.all %}
                 <tr>
+                  {% if item.code %}<td><small class="text-muted">{{ item.code }}</small></td>{% endif %}
                   <td>
                     <strong>{{ item.description }}</strong>
                     <br><small class="text-muted">{{ item.get_item_type_display }}{% if item.unit %} ({{ item.unit }}){% endif %}</small>
