@@ -1106,7 +1106,7 @@ function submitCreateInvoiceForm() {
     if (data.success) {
       const invoiceId = data.invoice_id;
       alert('Invoice created successfully! Redirecting...');
-      window.location.href = '/tracker/invoice/' + invoiceId + '/';
+      window.location.href = '{% url "tracker:invoice_detail" pk=0 %}'.replace('0/', invoiceId + '/');
     } else {
       alert('Failed to create invoice: ' + (data.error || 'Unknown error'));
     }
