@@ -882,38 +882,6 @@ document.addEventListener('DOMContentLoaded', function(){
   }
 });
 
-function applyExtractionToOrder(extractionId) {
-  if (!confirm('Apply extracted data to this order?')) {
-    return;
-  }
-  
-  fetch('{% url "tracker:api_apply_extraction" %}', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-CSRFToken': '{{ csrf_token }}'
-    },
-    body: JSON.stringify({
-      order_id: {{ order.id }},
-      extraction_id: extractionId,
-      apply_fields: ['customer_name', 'customer_phone', 'service_description', 'item_name', 'quantity', 'amount']
-    })
-  })
-  .then(response => response.json())
-  .then(data => {
-    if (data.success) {
-      alert('Data applied successfully!');
-      location.reload();
-    } else {
-      alert('Error: ' + data.error);
-    }
-  })
-  .catch(error => {
-    console.error('Error:', error);
-    alert('Error applying extraction data');
-  });
-}
-
 // Complete Order Logic
 document.addEventListener('DOMContentLoaded', function(){
   const completeBtn = document.getElementById('completeOrderBtn');
