@@ -505,6 +505,32 @@
                     <strong>{{ doc.extraction.reference }}</strong>
                   </div>
                   {% endif %}
+
+                  {# Embedded JSON for this extraction to allow client-side use #}
+                  <script type="application/json" id="extraction-data-{{ doc.extraction.id }}">{
+                    "id": {{ doc.extraction.id }},
+                    "customer": "{{ doc.extraction.extracted_customer_name|default:''|escapejs }}",
+                    "phone": "{{ doc.extraction.extracted_customer_phone|default:''|escapejs }}",
+                    "plate": "{{ doc.extraction.extracted_vehicle_plate|default:''|escapejs }}",
+                    "description": "{{ doc.extraction.extracted_order_description|default:''|escapejs }}",
+                    "code_no": "{{ doc.extraction.code_no|default:''|escapejs }}",
+                    "reference": "{{ doc.extraction.reference|default:''|escapejs }}",
+                    "net_value": "{{ doc.extraction.net_value|default:'' }}",
+                    "vat_amount": "{{ doc.extraction.vat_amount|default:'' }}",
+                    "gross_value": "{{ doc.extraction.gross_value|default:'' }}",
+                    "items": [
+                      {% for item in doc.extraction.items.all %}
+                        {
+                          "code": "{{ item.code|default:''|escapejs }}",
+                          "description": "{{ item.description|default:''|escapejs }}",
+                          "qty": "{{ item.qty|default:'' }}",
+                          "unit": "{{ item.unit|default:''|escapejs }}",
+                          "rate": "{{ item.rate|default:'' }}",
+                          "value": "{{ item.value|default:'' }}"
+                        }{% if not forloop.last %},{% endif %}
+                      {% endfor %}
+                    ]
+                  }</script>
                   {% if doc.extraction.net_value %}
                   <div class="col-md-6">
                     <small class="text-muted d-block">Net Value</small>
@@ -956,10 +982,48 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 
+function showCreateInvoiceModal(extractionId){
+  try{
+    const script = document.getElementById('extraction-data-' + extractionId);
+    if (!script) { console.warn('Extraction data not found for', extractionId); }
+    const data = script ? JSON.parse(script.textContent || '{}') : {};
+    document.getElementById('invoiceExtractionId').value = data.id || '';
+    document.getElementById('previewCustomer').textContent = data.customer || '-';
+    document.getElementById('previewPlate').textContent = data.plate || '-';
+    document.getElementById('previewDescription').textContent = data.description || '-';
+    document.getElementById('previewNetValue').textContent = data.net_value || '-';
+    document.getElementById('previewVatAmount').textContent = data.vat_amount || '-';
+
+    // Open modal
+    const modalEl = document.getElementById('createInvoiceFromExtractionModal');
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+  }catch(e){console.error(e);}
+}
+
 function submitCreateInvoiceForm() {
   const extractionId = document.getElementById('invoiceExtractionId').value;
   const form = document.getElementById('createInvoiceForm');
   const formData = new FormData(form);
+
+  // Try to include extracted items (if available)
+  let items = [];
+  try{
+    const script = document.getElementById('extraction-data-' + extractionId);
+    if (script){
+      const parsed = JSON.parse(script.textContent || '{}');
+      if (Array.isArray(parsed.items)){
+        items = parsed.items.map(it => ({
+          code: it.code || null,
+          description: it.description || null,
+          quantity: it.qty ? Number(it.qty) : 1,
+          unit: it.unit || null,
+          unit_price: it.rate ? Number(it.rate) : (it.value ? Number(it.value) : 0),
+          total: it.value ? Number(it.value) : null
+        }));
+      }
+    }
+  }catch(e){ console.warn('Failed to parse extracted items', e); }
 
   fetch('{% url "tracker:api_create_invoice_from_extraction" %}', {
     method: 'POST',
@@ -976,7 +1040,8 @@ function submitCreateInvoiceForm() {
       attended_by: formData.get('attended_by'),
       kind_attention: formData.get('kind_attention'),
       notes: formData.get('notes'),
-      terms: formData.get('terms')
+      terms: formData.get('terms'),
+      items: items
     })
   })
   .then(response => response.json())
