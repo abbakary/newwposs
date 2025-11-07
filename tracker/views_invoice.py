@@ -451,11 +451,25 @@ def api_upload_and_extract_invoice(request):
 
         result = process_uploaded_invoice_file(uploaded_file)
 
+        def _make_serializable(obj):
+            from decimal import Decimal
+            if isinstance(obj, dict):
+                return {k: _make_serializable(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [_make_serializable(v) for v in obj]
+            if isinstance(obj, Decimal):
+                try:
+                    return float(obj)
+                except Exception:
+                    return str(obj)
+            return obj
+
         if result['success']:
+            safe_data = _make_serializable(result.get('data', {}))
             return JsonResponse({
                 'success': True,
                 'message': 'Invoice processed successfully',
-                'data': result['data']
+                'data': safe_data
             })
         else:
             return JsonResponse({
