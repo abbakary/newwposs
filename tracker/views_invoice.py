@@ -129,59 +129,68 @@ def api_upload_extract_invoice(request):
     items = extracted.get('items') or []
     raw_text = extracted.get('raw_text') or ''
 
-    # Attempt to match customer by name
-    cust_name = (header.get('customer_name') or '').strip()
-    matched_customer = None
-    if cust_name:
-        try:
-            matched_customer = Customer.objects.filter(branch=user_branch, full_name__iexact=cust_name).first()
-        except Exception:
-            matched_customer = None
-
-    selected_order = None
-    # If client provided selected_order_id, use it
+    # Get selected_order_id and plate from POST
     selected_order_id = request.POST.get('selected_order_id') or None
     plate = (request.POST.get('plate') or '').strip().upper() or None
 
+    # Try to load the selected order first
+    selected_order = None
     if selected_order_id:
         try:
             selected_order = Order.objects.get(id=int(selected_order_id), branch=user_branch)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Selected order {selected_order_id} not found: {e}")
             selected_order = None
 
     # If no selected_order but plate provided, find started order
     if not selected_order and plate:
         try:
             selected_order = OrderService.find_started_order_by_plate(user_branch, plate)
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not find started order for plate {plate}: {e}")
             selected_order = None
 
-    # If matched customer found: proceed to create invoice and link
-    if matched_customer:
-        customer_obj = matched_customer
-    else:
-        # If no matched customer but plate available, create temporary customer
-        if plate:
-            try:
-                temp_name = f"Plate {plate}"
-                temp_phone = f"PLATE_{plate}"
-                customer_obj, created = CustomerService.create_or_get_customer(
-                    branch=user_branch,
-                    full_name=temp_name,
-                    phone=temp_phone,
-                    email=None,
-                    address=None,
-                    create_if_missing=True
-                )
-            except Exception as e:
-                logger.warning(f"Failed to create temp customer for plate {plate}: {e}")
-                customer_obj = None
-        else:
+    # Determine customer to use
+    customer_obj = None
+
+    # First, try to match customer by extracted name
+    cust_name = (header.get('customer_name') or '').strip()
+    if cust_name:
+        try:
+            customer_obj = Customer.objects.filter(branch=user_branch, full_name__iexact=cust_name).first()
+        except Exception:
+            pass
+
+    # If no match by name, use customer from selected order if available
+    if not customer_obj and selected_order:
+        customer_obj = selected_order.customer
+
+    # If still no customer, create temporary customer using plate if available
+    if not customer_obj and plate:
+        try:
+            temp_name = f"Plate {plate}"
+            temp_phone = f"PLATE_{plate}"
+            customer_obj, created = CustomerService.create_or_get_customer(
+                branch=user_branch,
+                full_name=temp_name,
+                phone=temp_phone,
+                email=None,
+                address=None,
+                create_if_missing=True
+            )
+        except Exception as e:
+            logger.warning(f"Failed to create temp customer for plate {plate}: {e}")
             customer_obj = None
 
-    # If still no customer_obj, return parsed data for manual review
+    # If still no customer_obj, require manual entry
     if not customer_obj:
-        return JsonResponse({'success': False, 'message': 'Customer not found. Manual review required.', 'data': extracted})
+        logger.warning("No customer found for invoice upload. Extraction data returned for manual review.")
+        return JsonResponse({
+            'success': False,
+            'message': 'Customer not identified. Please manually select or create a customer and try again.',
+            'data': extracted,
+            'ocr_available': extracted.get('ocr_available', False)
+        })
 
     # Ensure vehicle if plate
     vehicle = None
