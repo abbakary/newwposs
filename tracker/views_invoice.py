@@ -100,25 +100,27 @@ def api_upload_extract_invoice(request):
         logger.error(f"Failed to read uploaded file: {e}")
         return JsonResponse({'success': False, 'message': 'Failed to read uploaded file'})
 
-    # Run extractor
+    # Run PDF text extractor (no OCR required)
     try:
-        extracted = extract_from_bytes(file_bytes)
+        from tracker.utils.pdf_text_extractor import extract_from_bytes as extract_pdf_text
+        extracted = extract_pdf_text(file_bytes, uploaded_file.name if uploaded_file else 'document.pdf')
     except Exception as e:
-        logger.error(f"Extractor error: {e}\n{traceback.format_exc()}")
+        logger.error(f"PDF extraction error: {e}\n{traceback.format_exc()}")
         return JsonResponse({
             'success': False,
-            'message': 'Extraction failed',
+            'message': 'Failed to extract invoice data from file',
             'error': str(e),
             'ocr_available': False
         })
 
-    # If extraction failed or OCR not available, return error but allow manual entry
+    # If extraction failed, return error but allow manual entry
     if not extracted.get('success'):
         return JsonResponse({
             'success': False,
-            'message': extracted.get('message', 'Extraction failed. You can manually enter the invoice details.'),
+            'message': extracted.get('message', 'Could not extract data from file. Please enter invoice details manually.'),
             'error': extracted.get('error'),
-            'ocr_available': extracted.get('ocr_available', False)
+            'ocr_available': extracted.get('ocr_available', False),
+            'data': extracted  # Include any partial data for manual completion
         })
 
     header = extracted.get('header') or {}
