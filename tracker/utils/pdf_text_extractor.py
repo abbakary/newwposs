@@ -308,40 +308,57 @@ def parse_invoice_data(text: str) -> dict:
                 address = None
 
     # Extract phone/tel - improved to handle various formats
-    phone = extract_field_value(r'(?:Tel|Telephone|Phone)')
-    if phone:
-        # Remove "Fax" part if followed by fax number
-        phone = re.sub(r'[\s/]+Fax.*$', '', phone, flags=re.I).strip()
-        # Remove trailing non-numeric characters
-        phone = re.sub(r'[\s/]+.*(?:Tel|Fax|Email|Address|Ref)\b.*$', '', phone, flags=re.I).strip()
-        # Validate - phone should have some digits (at least 5 consecutive digits or similar patterns)
-        if phone and not re.search(r'\d{5,}', phone):
-            phone = None
-        # Clean up - remove common non-digit prefixes and ensure we have a phone
-        if phone:
-            phone = re.sub(r'^(?:Tel|Phone|Telephone)\s*[:=]?\s*', '', phone, flags=re.I).strip()
-            # If phone contains "/" or "-", keep first meaningful number
-            if '/' in phone:
-                parts = phone.split('/')
-                phone = parts[0].strip()
-            # Final validation - must have digits
-            if phone and not re.search(r'\d', phone):
-                phone = None
+    phone = None
+    phone_pattern = re.compile(r'Tel\s*[:=]?\s*([^\n:{{]+?)(?=\n(?:Fax|Attended|Kind|Reference|Remarks|Date|Del\.|PI)\b|$)', re.I | re.MULTILINE)
+    phone_match = phone_pattern.search(normalized_text)
 
-    # Extract email
+    if phone_match:
+        phone = phone_match.group(1).strip()
+        # Remove "Fax" part if it appears
+        phone = re.sub(r'[\s/]+(?:Fax.*)?$', '', phone, flags=re.I).strip()
+        # Validate - phone should have some digits or be a descriptive value like "Sales Point"
+        if phone and (re.search(r'\d', phone) or len(phone) > 3):
+            # If contains slash or hyphen with numbers, keep first part
+            if '/' in phone or '-' in phone:
+                parts = re.split(r'[\/-]', phone)
+                phone = parts[0].strip()
+        else:
+            phone = None
+
+    # Extract email - look for email pattern in the text
     email = None
     email_match = re.search(r'([\w\.-]+@[\w\.-]+\.\w+)', normalized_text)
     if email_match:
         email = email_match.group(1)
 
-    # Extract reference
-    reference = extract_field_value(r'(?:Reference|Ref\.?|For|FOR)')
+    # Extract reference - more careful pattern to avoid getting other labels
+    reference = None
+    ref_pattern = re.compile(r'(?:Reference|Ref\.?)\s*[:=]?\s*([^\n:{{]+?)(?=\n(?:Tel|Code|PI|Date|Del\.|Attended|Kind|Remarks)\b|$)', re.I | re.MULTILINE)
+    ref_match = ref_pattern.search(normalized_text)
 
-    # Extract PI No. / Invoice Number
-    invoice_no = extract_field_value([
-        r'PI\s*(?:No|Number|#)',
-        r'Invoice\s*(?:No|Number)'
-    ])
+    if ref_match:
+        reference = ref_match.group(1).strip()
+        # Clean up
+        reference = re.sub(r'\s+(?:Tel|Fax|Date|PI|Code)\b.*$', '', reference, flags=re.I).strip()
+        if not reference or reference.upper() == 'NONE' or len(reference) < 2:
+            reference = None
+
+    # Extract PI No. / Invoice Number - specifically handle "PI No." format
+    invoice_no = None
+    pi_pattern = re.compile(r'PI\s*(?:No|Number|#)\s*[:=]?\s*([^\n:{{]+?)(?=\n|$)', re.I | re.MULTILINE)
+    pi_match = pi_pattern.search(normalized_text)
+
+    if pi_match:
+        invoice_no = pi_match.group(1).strip()
+        # Clean up trailing whitespace and field names
+        invoice_no = re.sub(r'\s+(?:Date|Cust|Ref|Del|Code)\b.*$', '', invoice_no, flags=re.I).strip()
+
+    # Fallback to "Invoice Number" pattern if PI No not found
+    if not invoice_no:
+        invoice_no = extract_field_value([
+            r'Invoice\s*(?:No|Number)',
+            r'Invoice\s*Number'
+        ])
 
     # Extract Date (multiple formats)
     date_str = None
