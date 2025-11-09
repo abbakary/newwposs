@@ -727,7 +727,7 @@ def parse_invoice_data(text: str) -> dict:
                         # Find qty: small integer (1-1000)
                         qty_candidate = None
                         qty_index = None
-                        for idx, fn in enumerate(float_numbers):
+                        for num_idx, fn in enumerate(float_numbers):
                             if 0.5 < fn < 1000 and (fn == int(fn) or abs(fn - round(fn)) < 0.1):
                                 if fn <= max_num / 10:  # Qty should be much smaller than value
                                     qty_candidate = int(round(fn))
