@@ -27,47 +27,75 @@ logger = logging.getLogger(__name__)
 
 def extract_text_from_pdf(file_bytes) -> str:
     """Extract text from PDF file using PyMuPDF or PyPDF2.
-    
+
     Args:
         file_bytes: Raw bytes of PDF file
-        
+
     Returns:
         Extracted text string
-        
+
     Raises:
-        RuntimeError: If no PDF extraction library is available
+        RuntimeError: If no PDF extraction library is available or text extraction fails
     """
     text = ""
-    
+    fitz_error = None
+    pdf2_error = None
+
     # Try PyMuPDF first (fitz) - best for text extraction
     if fitz is not None:
         try:
             pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
             for page in pdf_doc:
-                text += page.get_text()
+                page_text = page.get_text()
+                if page_text:
+                    text += page_text
             pdf_doc.close()
-            logger.info(f"Extracted {len(text)} characters from PDF using PyMuPDF")
-            return text
+
+            if text and text.strip():
+                logger.info(f"Successfully extracted {len(text)} characters from PDF using PyMuPDF")
+                return text
+            else:
+                logger.warning("PyMuPDF extracted empty text from PDF")
+                fitz_error = "No text found in PDF (PyMuPDF)"
         except Exception as e:
             logger.warning(f"PyMuPDF extraction failed: {e}")
+            fitz_error = str(e)
             text = ""
-    
+
     # Fallback to PyPDF2
+    text = ""
     if PyPDF2 is not None:
         try:
             pdf_reader = PyPDF2.PdfReader(io.BytesIO(file_bytes))
-            for page in pdf_reader.pages:
-                text += page.extract_text()
-            logger.info(f"Extracted {len(text)} characters from PDF using PyPDF2")
-            return text
+            if len(pdf_reader.pages) == 0:
+                pdf2_error = "PDF has no pages"
+            else:
+                for page in pdf_reader.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text
+
+                if text and text.strip():
+                    logger.info(f"Successfully extracted {len(text)} characters from PDF using PyPDF2")
+                    return text
+                else:
+                    logger.warning("PyPDF2 extracted empty text from PDF")
+                    pdf2_error = "No text found in PDF (PyPDF2)"
         except Exception as e:
             logger.warning(f"PyPDF2 extraction failed: {e}")
-            text = ""
-    
-    if not text:
-        raise RuntimeError('No PDF text extraction library available. Install PyMuPDF or PyPDF2.')
-    
-    return text
+            pdf2_error = str(e)
+
+    # If we get here, extraction failed with both libraries
+    if not fitz and not PyPDF2:
+        error_msg = 'No PDF extraction library available. Install PyMuPDF or PyPDF2.'
+    elif fitz_error and pdf2_error:
+        error_msg = f'PDF extraction failed - PyMuPDF: {fitz_error}. PyPDF2: {pdf2_error}'
+    elif fitz_error:
+        error_msg = fitz_error
+    else:
+        error_msg = pdf2_error or 'Unknown PDF extraction error'
+
+    raise RuntimeError(error_msg)
 
 
 def extract_text_from_image(file_bytes) -> str:
@@ -741,15 +769,15 @@ def parse_invoice_data(text: str) -> dict:
 
 def extract_from_bytes(file_bytes, filename: str = '') -> dict:
     """Main entry point: extract text from file and parse invoice data.
-    
+
     Supports:
     - PDF files: Uses PyMuPDF/PyPDF2 for text extraction
     - Image files: Requires manual entry (OCR not available)
-    
+
     Args:
         file_bytes: Raw bytes of uploaded file
         filename: Original filename (to detect file type)
-        
+
     Returns:
         dict with keys: success, header, items, raw_text, ocr_available, error, message
     """
@@ -757,103 +785,123 @@ def extract_from_bytes(file_bytes, filename: str = '') -> dict:
         return {
             'success': False,
             'error': 'empty_file',
-            'message': 'File is empty',
+            'message': 'File is empty. Please upload a valid PDF file.',
             'ocr_available': False,
             'header': {},
             'items': [],
             'raw_text': ''
         }
-    
+
     # Detect file type
     is_pdf = filename.lower().endswith('.pdf') or file_bytes[:4] == b'%PDF'
     is_image = filename.lower().endswith(('.jpg', '.jpeg', '.png', '.gif', '.tiff', '.bmp'))
-    
+
     text = ""
-    extraction_error = None
-    
-    # Try to extract text
-    if is_pdf:
-        try:
-            text = extract_text_from_pdf(file_bytes)
-        except Exception as e:
-            logger.error(f"PDF extraction failed: {e}")
-            extraction_error = str(e)
-            return {
-                'success': False,
-                'error': 'pdf_extraction_failed',
-                'message': f'Failed to extract text from PDF: {str(e)}. Please enter invoice details manually.',
-                'ocr_available': False,
-                'header': {},
-                'items': [],
-                'raw_text': ''
-            }
-    elif is_image:
+
+    # Validate file format
+    if is_image:
         return {
             'success': False,
             'error': 'image_file_not_supported',
-            'message': 'Image files require manual entry (OCR not available). Please save as PDF or enter details manually.',
+            'message': 'Image files are not supported. Please convert to PDF or enter details manually.',
             'ocr_available': False,
             'header': {},
             'items': [],
             'raw_text': ''
         }
-    else:
+
+    if not is_pdf:
         return {
             'success': False,
             'error': 'unsupported_file_type',
-            'message': 'Please upload a PDF file (images are not supported without OCR).',
+            'message': 'Please upload a PDF file.',
             'ocr_available': False,
             'header': {},
             'items': [],
             'raw_text': ''
         }
-    
-    # Parse extracted text
-    if text:
-        try:
-            parsed = parse_invoice_data(text)
-            # Prepare header with all extracted fields
-            header = {
-                'invoice_no': parsed.get('invoice_no'),
-                'code_no': parsed.get('code_no'),
-                'date': parsed.get('date'),
-                'customer_name': parsed.get('customer_name'),
-                'phone': parsed.get('phone'),
-                'email': parsed.get('email'),
-                'address': parsed.get('address'),
-                'reference': parsed.get('reference'),
-                'subtotal': parsed.get('subtotal'),
-                'tax': parsed.get('tax'),
-                'total': parsed.get('total'),
-                'payment_method': parsed.get('payment_method'),
-                'delivery_terms': parsed.get('delivery_terms'),
-                'remarks': parsed.get('remarks'),
-                'attended_by': parsed.get('attended_by'),
-                'kind_attention': parsed.get('kind_attention'),
-            }
 
-            # Format items with all extracted fields
-            items = []
-            for item in parsed.get('items', []):
-                items.append({
-                    'description': item.get('description', ''),
-                    'qty': item.get('qty', 1),
-                    'unit': item.get('unit'),
-                    'code': item.get('code'),
-                    'value': float(item.get('value', 0)) if item.get('value') else 0,
-                    'rate': float(item.get('rate', 0)) if item.get('rate') else None,
-                })
+    # Extract text from PDF
+    try:
+        text = extract_text_from_pdf(file_bytes)
+    except Exception as e:
+        logger.error(f"PDF text extraction failed: {e}")
+        return {
+            'success': False,
+            'error': 'pdf_extraction_failed',
+            'message': f'Could not extract text from PDF. Please enter invoice details manually.',
+            'ocr_available': False,
+            'header': {},
+            'items': [],
+            'raw_text': ''
+        }
 
+    # Validate that we got text
+    if not text or not text.strip():
+        logger.warning("PDF text extraction returned empty text")
+        return {
+            'success': False,
+            'error': 'no_text_extracted',
+            'message': 'No readable text found in PDF (possibly a scanned image). Please enter invoice details manually.',
+            'ocr_available': False,
+            'header': {},
+            'items': [],
+            'raw_text': ''
+        }
+
+    # Parse extracted text to structured invoice data
+    try:
+        parsed = parse_invoice_data(text)
+
+        # Prepare header with all extracted fields
+        header = {
+            'invoice_no': parsed.get('invoice_no'),
+            'code_no': parsed.get('code_no'),
+            'date': parsed.get('date'),
+            'customer_name': parsed.get('customer_name'),
+            'phone': parsed.get('phone'),
+            'email': parsed.get('email'),
+            'address': parsed.get('address'),
+            'reference': parsed.get('reference'),
+            'subtotal': parsed.get('subtotal'),
+            'tax': parsed.get('tax'),
+            'total': parsed.get('total'),
+            'payment_method': parsed.get('payment_method'),
+            'delivery_terms': parsed.get('delivery_terms'),
+            'remarks': parsed.get('remarks'),
+            'attended_by': parsed.get('attended_by'),
+            'kind_attention': parsed.get('kind_attention'),
+        }
+
+        # Format items with all extracted fields
+        items = []
+        for item in parsed.get('items', []):
+            items.append({
+                'description': item.get('description', ''),
+                'qty': item.get('qty', 1),
+                'unit': item.get('unit'),
+                'code': item.get('code'),
+                'value': float(item.get('value', 0)) if item.get('value') else 0,
+                'rate': float(item.get('rate', 0)) if item.get('rate') else None,
+            })
+
+        # Check if we extracted any meaningful data
+        has_customer = bool(header.get('customer_name'))
+        has_items = len(items) > 0
+        has_amounts = any([header.get('subtotal'), header.get('tax'), header.get('total')])
+
+        if has_customer or has_items or has_amounts:
+            logger.info(f"Successfully extracted invoice data: customer={has_customer}, items={has_items}, amounts={has_amounts}")
             return {
                 'success': True,
                 'header': header,
                 'items': items,
                 'raw_text': text,
-                'ocr_available': False,  # Using text extraction, not OCR
-                'message': 'Invoice data extracted successfully from PDF'
+                'ocr_available': False,
+                'message': 'Invoice data extracted successfully'
             }
-        except Exception as e:
-            logger.warning(f"Failed to parse invoice data: {e}")
+        else:
+            logger.warning("PDF text extracted but no invoice data found after parsing")
             return {
                 'success': False,
                 'error': 'parsing_failed',
@@ -863,14 +911,14 @@ def extract_from_bytes(file_bytes, filename: str = '') -> dict:
                 'items': [],
                 'raw_text': text
             }
-    
-    # If no text was extracted
-    return {
-        'success': False,
-        'error': 'no_text_extracted',
-        'message': 'No text found in PDF. Please enter invoice details manually.',
-        'ocr_available': False,
-        'header': {},
-        'items': [],
-        'raw_text': ''
-    }
+    except Exception as e:
+        logger.error(f"Invoice data parsing failed: {e}", exc_info=True)
+        return {
+            'success': False,
+            'error': 'parsing_failed',
+            'message': 'Could not extract structured data from PDF. Please enter invoice details manually.',
+            'ocr_available': False,
+            'header': {},
+            'items': [],
+            'raw_text': text
+        }
