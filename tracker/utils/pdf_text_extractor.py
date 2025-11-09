@@ -450,13 +450,19 @@ def parse_invoice_data(text: str) -> dict:
         r'Total\s*(?::|\s)'
     ]))
 
-    # Extract payment method
-    payment_method = extract_field_value(r'(?:Payment|Payment\s*Method|Payment\s*Type)')
-    if payment_method:
-        # Clean up the payment method value
-        payment_method = re.sub(r'Delivery.*$', '', payment_method, flags=re.I).strip()
+    # Extract payment method - careful pattern to extract payment terms
+    payment_method = None
+    payment_pattern = re.compile(r'(?:Payment|Payment\s*Method|Payment\s*Type)\s*[:=]?\s*([^\n:{{]+?)(?=\n|$)', re.I | re.MULTILINE)
+    payment_match = payment_pattern.search(normalized_text)
+
+    if payment_match:
+        payment_method = payment_match.group(1).strip()
+        # Clean up
+        payment_method = re.sub(r'\s+(?:Delivery|Remarks|Net|Gross|Due|NOTE)\b.*$', '', payment_method, flags=re.I).strip()
+
         if payment_method and len(payment_method) > 1:
-            # Map common payment method strings to standard values
+            # Normalize the payment method
+            payment_lower = payment_method.lower()
             payment_map = {
                 'cash': 'cash',
                 'cheque': 'cheque',
@@ -469,22 +475,44 @@ def parse_invoice_data(text: str) -> dict:
                 'delivery': 'on_delivery',
                 'cod': 'on_delivery',
             }
+
+            normalized = None
             for key, val in payment_map.items():
-                if key in payment_method.lower():
-                    payment_method = val
+                if key in payment_lower:
+                    normalized = val
                     break
 
-    # Extract delivery terms
-    delivery_terms = extract_field_value(r'(?:Delivery|Delivery\s*Terms)')
-    if delivery_terms:
-        delivery_terms = re.sub(r'(?:Remarks|Notes|NOTE).*$', '', delivery_terms, flags=re.I).strip()
+            if normalized:
+                payment_method = normalized
+            # Keep original if no mapping found
+        else:
+            payment_method = None
 
-    # Extract remarks/notes
-    remarks = extract_field_value(r'(?:Remarks|Notes|NOTE)')
-    if remarks:
-        # Clean up - remove trailing labels and numbers
+    # Extract delivery terms - improved pattern
+    delivery_terms = None
+    delivery_pattern = re.compile(r'(?:Delivery|Delivery\s*Terms)\s*[:=]?\s*([^\n:{{]+?)(?=\n|$)', re.I | re.MULTILINE)
+    delivery_match = delivery_pattern.search(normalized_text)
+
+    if delivery_match:
+        delivery_terms = delivery_match.group(1).strip()
+        # Clean up
+        delivery_terms = re.sub(r'\s+(?:Remarks|Notes|NOTE|Net|Gross|Payment)\b.*$', '', delivery_terms, flags=re.I).strip()
+        if not delivery_terms or len(delivery_terms) < 2:
+            delivery_terms = None
+
+    # Extract remarks/notes - improved pattern
+    remarks = None
+    remarks_pattern = re.compile(r'(?:Remarks|Notes|NOTE)\s*[:=]?\s*(.+?)(?=\n(?:Payment|Delivery|Net|Gross|NOTE|Authorized|Qty|Code)\b|$)', re.I | re.MULTILINE | re.DOTALL)
+    remarks_match = remarks_pattern.search(normalized_text)
+
+    if remarks_match:
+        remarks = remarks_match.group(1).strip()
+        # Clean up - remove extra spaces, newlines, and trailing labels
+        remarks = ' '.join(remarks.split())
         remarks = re.sub(r'(?:\d+\s*:|^NOTE\s*\d+\s*:)', '', remarks, flags=re.I).strip()
-        remarks = re.sub(r'(?:Payment|Delivery|Due|See).*$', '', remarks, flags=re.I).strip()
+        remarks = re.sub(r'(?:Payment|Delivery|Due|See|Qty|Code|SR)\b.*$', '', remarks, flags=re.I).strip()
+        if not remarks or len(remarks) < 2:
+            remarks = None
 
     # Extract "Attended By" field - more careful pattern matching
     attended_by = None
