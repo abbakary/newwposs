@@ -80,25 +80,33 @@ def ocr_image(img_pil):
 
 
 def extract_header_fields(text):
-    # Helper to find first match group
-    def find(pattern):
-        m = re.search(pattern, text, re.I)
-        return m.group(1).strip() if m else None
+    # Helper to find first match group with flexible spacing
+    def find(pattern, flags=re.I | re.MULTILINE):
+        m = re.search(pattern, text, flags)
+        if m:
+            result = m.group(1).strip() if m.lastindex and m.lastindex >= 1 else m.group(0).strip()
+            return ' '.join(result.split()) if result else None
+        return None
 
-    invoice_no = find(r'(?:PI|PI\.?|Invoice|Invoice No|PI No)[\s:\-]*([A-Z0-9\-\/]+)')
-    code_no = find(r'(?:Code No|Code)[\s:\-]*([A-Z0-9\-]+)')
-    date_str = find(r'\bDate\b[\s:\-]*([0-3]?\d[\-/][01]?\d[\-/]\d{2,4})')
-    customer_name = find(r'(?:Customer Name|Customer|Bill To|Buyer)[:\s\-]*([^\n\r\:]{3,120})')
-    address = find(r'(?:Address|Addr\.|Add)[:\s\-]*([^\n\r]{5,200})')
+    invoice_no = find(r'(?:PI|P\.?I\.?|Invoice|Invoice\s*(?:Number|No)|PI\s*No)[\s:\-]*([A-Z0-9\-\/]+)')
+    code_no = find(r'(?:Code\s*(?:No|Number)|Code\s*#)[\s:\-]*([A-Z0-9\-\/]+)')
+    date_str = find(r'(?:Date|Invoice\s*Date)[\s:\-]*([0-3]?\d[\s/\-][01]?\d[\s/\-]\d{2,4})')
+    customer_name = find(r'(?:Customer\s*Name|Customer|Bill\s*To|Buyer|TO)[\s:\-]*([A-Z][^\n\r\:]{3,150})')
+    address = find(r'(?:Address|Addr\.|Add)[\s:\-]*([^\n\r]{5,200})')
+    phone = find(r'(?:Tel|Telephone|Phone|Mobile)[\s:\-]*(\+?[0-9\s\-\(\)\.]{7,25})')
+    email = find(r'(?:Email|E-mail)[\s:\-]*([^\s\n\r:@]+@[^\s\n\r:]+)')
+    reference = find(r'(?:Reference|Ref\.?|FOR)[\s:\-]*([A-Z0-9\s\-\/]{3,50})')
 
     # Totals
-    net = find(r'(?:Net Value|Net)[\s:\-]*([0-9\,]+\.?\d{0,2})')
-    vat = find(r'(?:VAT|Tax)[\s:\-]*([0-9\,]+\.?\d{0,2})')
-    gross = find(r'(?:Gross Value|Gross)[\s:\-]*(?:TSH)?\s*([0-9\,]+\.?\d{0,2})')
+    net = find(r'(?:Net\s*Value|Net|Subtotal)[\s:\-]*(?:TSH)?\s*([0-9\,]+\.?\d{0,2})')
+    vat = find(r'(?:VAT|Tax|GST)[\s:\-]*(?:TSH)?\s*([0-9\,]+\.?\d{0,2})')
+    gross = find(r'(?:Gross\s*Value|Gross|Total\s*Amount|Total)[\s:\-]*(?:TSH)?\s*([0-9\,]+\.?\d{0,2})')
 
     def to_decimal(s):
         try:
-            return Decimal(str(s).replace(',', ''))
+            if s:
+                cleaned = re.sub(r'[^\d\.\,\-]', '', str(s)).strip()
+                return Decimal(cleaned.replace(',', ''))
         except Exception:
             return None
 
@@ -108,6 +116,9 @@ def extract_header_fields(text):
         'date': date_str,
         'customer_name': customer_name,
         'address': address,
+        'phone': phone,
+        'email': email,
+        'reference': reference,
         'net_value': to_decimal(net) if net else None,
         'vat': to_decimal(vat) if vat else None,
         'gross_value': to_decimal(gross) if gross else None,
