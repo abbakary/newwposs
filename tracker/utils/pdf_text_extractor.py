@@ -486,11 +486,29 @@ def parse_invoice_data(text: str) -> dict:
         remarks = re.sub(r'(?:\d+\s*:|^NOTE\s*\d+\s*:)', '', remarks, flags=re.I).strip()
         remarks = re.sub(r'(?:Payment|Delivery|Due|See).*$', '', remarks, flags=re.I).strip()
 
-    # Extract "Attended By" field
-    attended_by = extract_field_value(r'(?:Attended\s*By|Attended|Served\s*By)')
+    # Extract "Attended By" field - more careful pattern matching
+    attended_by = None
+    attended_pattern = re.compile(r'Attended\s*(?:By|:)?\s*([^\n:{{]+?)(?=\n(?:Kind|Reference|Tel|Remarks|Payment)\b|$)', re.I | re.MULTILINE)
+    attended_match = attended_pattern.search(normalized_text)
 
-    # Extract "Kind Attention" field
-    kind_attention = extract_field_value(r'(?:Kind\s*Attention|Kind\s*Attn)')
+    if attended_match:
+        attended_by = attended_match.group(1).strip()
+        # Clean up
+        attended_by = re.sub(r'\s+(?:Kind|Reference|Tel|Remarks|Payment)\b.*$', '', attended_by, flags=re.I).strip()
+        if not attended_by or len(attended_by) < 2:
+            attended_by = None
+
+    # Extract "Kind Attention" field - handles both "Kind Attention" and "Kind Attn"
+    kind_attention = None
+    kind_pattern = re.compile(r'Kind\s*(?:Attention|Attn|:)?\s*([^\n:{{]+?)(?=\n(?:Reference|Remarks|Tel|Attended|Payment|Delivery)\b|$)', re.I | re.MULTILINE)
+    kind_match = kind_pattern.search(normalized_text)
+
+    if kind_match:
+        kind_attention = kind_match.group(1).strip()
+        # Clean up
+        kind_attention = re.sub(r'\s+(?:Reference|Remarks|Tel|Attended|Payment|Delivery)\b.*$', '', kind_attention, flags=re.I).strip()
+        if not kind_attention or len(kind_attention) < 2:
+            kind_attention = None
 
     # Extract line items with improved detection for various formats
     # The algorithm:
