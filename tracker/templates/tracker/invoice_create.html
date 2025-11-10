@@ -612,12 +612,17 @@
                 const progressBar = progressWrap ? progressWrap.querySelector('.progress-bar') : null;
                 const errorBox = document.getElementById('uploadError');
                 const reviewModalEl = document.getElementById('extractionReviewModal');
-                const reviewModal = reviewModalEl ? new bootstrap.Modal(reviewModalEl) : null;
+                const reviewModal = reviewModalEl && typeof bootstrap !== 'undefined' ? new bootstrap.Modal(reviewModalEl) : null;
                 const extractedHeader = document.getElementById('extractedHeader');
                 const extractedItemsBody = document.getElementById('extractedItemsBody');
                 const extractedRaw = document.getElementById('extractedRaw');
                 const applyBtn = document.getElementById('applyExtractionBtn');
                 const createBtn = document.getElementById('createFromExtractionBtn');
+
+                if (!uploadBtn || !fileInput || !errorBox) {
+                  console.warn('Invoice upload elements not found. Upload functionality disabled.');
+                  return;
+                }
 
                 function getCSRF(){
                   const name = 'csrftoken=';
@@ -636,6 +641,7 @@
                     if (!fileInput || !fileInput.files || !fileInput.files[0]){
                       errorBox.style.display='block';
                       errorBox.innerHTML='<i class="fa fa-warning me-2"></i>Please select a file to upload.';
+                      errorBox.className = 'alert alert-warning mt-2';
                       return;
                     }
 
@@ -643,13 +649,13 @@
                     if (file.size > 50 * 1024 * 1024) {
                       errorBox.style.display='block';
                       errorBox.innerHTML='<i class="fa fa-warning me-2"></i>File is too large. Maximum size is 50MB.';
+                      errorBox.className = 'alert alert-warning mt-2';
                       return;
                     }
 
                     errorBox.style.display='none';
                     const fd = new FormData();
                     fd.append('file', file);
-                    // include optional plate or selected order id
                     const plateEl = document.querySelector('[name="plate_number"]');
                     const plate = plateEl ? plateEl.value.trim().toUpperCase() : '';
                     if (plate) fd.append('plate', plate);
@@ -669,23 +675,34 @@
                       });
 
                       setProgress(100);
-                      const data = await r.json();
 
-                      if (data && data.success){
+                      if (!r.ok) {
+                        throw new Error(`Server error: ${r.status} ${r.statusText}`);
+                      }
+
+                      let data;
+                      try {
+                        data = await r.json();
+                      } catch(jsonErr) {
+                        throw new Error('Invalid response format from server');
+                      }
+
+                      if (!data) {
+                        throw new Error('Empty response from server');
+                      }
+
+                      if (data.success === true){
                         errorBox.style.display='block';
                         errorBox.innerHTML='<i class="fa fa-check-circle text-success me-2"></i>Invoice created successfully! Redirecting...';
                         errorBox.className = 'alert alert-success mt-2';
-                        // Redirect to invoice detail
                         setTimeout(function(){
                           window.location.href = data.redirect_url || ('/tracker/invoices/' + data.invoice_id + '/');
                         }, 500);
                         return;
                       }
 
-                      // If extraction requires manual review, data.data contains parsed fields
-                      if (data && data.data){
+                      if (data.data && data.data.header){
                         const d = data.data;
-                        // Populate modal with extracted header data
                         const hdr = d.header || {};
                         const invoiceNo = hdr.invoice_no || hdr.code_no || 'N/A';
                         const date = hdr.date || 'N/A';
@@ -731,28 +748,37 @@
                             <div class="col-md-4"><strong>Total:</strong> ${total} TSH</div>
                           </div>`;
 
-                        extractedHeader.innerHTML = headerHtml;
-                        extractedItemsBody.innerHTML = '';
+                        if (extractedHeader) extractedHeader.innerHTML = headerHtml;
+                        if (extractedItemsBody) extractedItemsBody.innerHTML = '';
                         (d.items || []).forEach(it=>{
+                          if (!extractedItemsBody) return;
                           const tr = document.createElement('tr');
                           const itemValue = it.value ? parseFloat(it.value).toLocaleString('en-US', {minimumFractionDigits: 2}) : '';
                           tr.innerHTML = `<td>${it.code||''}</td><td>${it.description||''}</td><td>${it.qty||''}</td><td>${itemValue}</td>`;
                           extractedItemsBody.appendChild(tr);
                         });
-                        extractedRaw.textContent = d.raw_text ? d.raw_text.substring(0,2000) : '';
-                        // store last extraction globally
+                        if (extractedRaw) extractedRaw.textContent = d.raw_text ? d.raw_text.substring(0,2000) : '';
                         window.__lastInvoiceExtraction = d;
-                        reviewModal && reviewModal.show();
+                        if (reviewModal) {
+                          reviewModal.show();
+                        } else {
+                          errorBox.style.display='block';
+                          errorBox.innerHTML = '<i class="fa fa-info-circle me-2"></i>Extraction complete. Please review the data in the form below.';
+                          errorBox.className = 'alert alert-info mt-2';
+                        }
                       } else {
                         errorBox.style.display='block';
-                        errorBox.innerHTML = '<i class="fa fa-exclamation-circle me-2"></i>' + (data.message || 'Could not fully extract invoice. Please review and apply fields below, or enter manually.');
+                        const msgText = data.message || 'Could not extract invoice data. Please check the file format and try again.';
+                        errorBox.innerHTML = '<i class="fa fa-exclamation-circle me-2"></i>' + msgText;
                         errorBox.className = 'alert alert-warning mt-2';
                       }
                     } catch(err){
                       setProgress(0);
                       errorBox.style.display='block';
-                      errorBox.innerHTML = '<i class="fa fa-exclamation-triangle me-2"></i>Upload error: ' + (err && err.message ? err.message : String(err));
+                      const errMsg = (err && err.message) ? err.message : String(err);
+                      errorBox.innerHTML = '<i class="fa fa-exclamation-triangle me-2"></i>Upload error: ' + errMsg;
                       errorBox.className = 'alert alert-danger mt-2';
+                      console.error('Upload extraction error:', err);
                     } finally {
                       uploadBtn.disabled = false;
                       uploadBtn.innerHTML = originalBtnText;
@@ -767,9 +793,8 @@
                     if (!d || !d.header) return;
                     const hdr = d.header;
                     const f = document.querySelector('form');
+                    if (!f) return;
 
-                    // Comprehensive mapping of extracted fields to form field names
-                    // Maps extraction field names to form input names
                     const map = {
                       'customer_full_name': hdr.customer_name || '',
                       'customer_phone': hdr.phone || '',
@@ -778,28 +803,23 @@
                       'reference': hdr.reference || hdr.invoice_no || hdr.code_no || '',
                       'attended_by': hdr.attended_by || '',
                       'kind_attention': hdr.kind_attention || '',
-                      'remarks': hdr.remarks || '',
                       'notes': (hdr.notes || hdr.remarks || ''),
-                      'payment_method': hdr.payment_method || '',
-                      'delivery_terms': hdr.delivery_terms || ''
+                      'terms': hdr.delivery_terms || ''
                     };
 
-                    // Apply mapped values to form fields
                     Object.keys(map).forEach(k=>{
                       const el = f.querySelector('[name="'+k+'"]');
-                      if (el) {
+                      if (el && map[k]) {
                         el.value = map[k];
                         el.dispatchEvent(new Event('input', {bubbles: true}));
                         el.dispatchEvent(new Event('change', {bubbles: true}));
                       }
                     });
 
-                    // Handle invoice_date - convert from extracted date format (dd/mm/yyyy) to form format (YYYY-MM-DD)
                     if (hdr.date) {
                       const dateEl = f.querySelector('[name="invoice_date"]');
                       if (dateEl) {
                         let formattedDate = hdr.date;
-                        // If date looks like dd/mm/yyyy, convert to yyyy-mm-dd
                         const dateMatch = String(hdr.date).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
                         if (dateMatch) {
                           formattedDate = dateMatch[3] + '-' + String(dateMatch[2]).padStart(2,'0') + '-' + String(dateMatch[1]).padStart(2,'0');
@@ -810,7 +830,6 @@
                       }
                     }
 
-                    // Handle tax_rate - try to extract percentage value
                     if (hdr.tax_rate) {
                       const taxEl = f.querySelector('[name="tax_rate"]');
                       if (taxEl) {
@@ -823,13 +842,14 @@
                       }
                     }
 
-                    // Switch back to manual mode
-                    reviewModal && reviewModal.hide();
-                    document.getElementById('mode-manual').checked=true;
-                    document.getElementById('mode-upload').checked=false;
-                    document.getElementById('uploadSection').classList.add('d-none');
+                    if (reviewModal) reviewModal.hide();
+                    const modeManual = document.getElementById('mode-manual');
+                    const modeUpload = document.getElementById('mode-upload');
+                    const uploadSection = document.getElementById('uploadSection');
+                    if (modeManual) modeManual.checked = true;
+                    if (modeUpload) modeUpload.checked = false;
+                    if (uploadSection) uploadSection.classList.add('d-none');
 
-                    // Scroll to top so user can see the applied data
                     setTimeout(function(){
                       window.scrollTo({top: 0, behavior: 'smooth'});
                     }, 100);
@@ -838,14 +858,13 @@
 
                 if (createBtn){
                   createBtn.addEventListener('click', function(){
-                    // Try to create invoice using extraction: call API again but expect server to create when plate or matched customer exists
                     const d = window.__lastInvoiceExtraction || {};
-                    if (!d){ errorBox.style.display='block'; errorBox.textContent='No extraction available'; return; }
-                    // server-side create already attempted earlier; instruct user to apply to form and submit if create failed
-                    // For now hide modal and let user apply then create
-                    reviewModal && reviewModal.hide();
-                    applyBtn.click();
-                    alert('Applied extraction to form. Please review fields and click Create Invoice to finalize.');
+                    if (!d || !d.header) {
+                      alert('No extraction data available. Please try uploading again.');
+                      return;
+                    }
+                    if (reviewModal) reviewModal.hide();
+                    if (applyBtn) applyBtn.click();
                   });
                 }
 
