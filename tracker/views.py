@@ -3019,8 +3019,15 @@ def order_detail(request: HttpRequest, pk: int):
         order.auto_progress_if_elapsed()
     except Exception:
         pass
+
+    # Get linked invoice (one-to-one relationship)
+    invoice = order.invoices.first() if order.invoices.exists() else None
+
     # Prepare context
-    context = {"order": order}
+    context = {
+        "order": order,
+        "invoice": invoice,
+    }
     return render(request, "tracker/order_detail.html", context)
 
 
