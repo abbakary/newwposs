@@ -449,6 +449,39 @@
                       </a>
                     </li>
                     <li><hr class="dropdown-divider my-1"></li>
+                    {% with inv=o.invoices.all|first %}
+                    {% if inv %}
+                    <li>
+                      <a class="dropdown-item" href="{% url 'tracker:invoice_detail' pk=inv.id %}">
+                        <i class="fa fa-file-invoice me-2 text-primary"></i>View Invoice
+                      </a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item" target="_blank" href="{% url 'tracker:invoice_print' pk=inv.id %}">
+                        <i class="fa fa-print me-2 text-secondary"></i>Print Invoice
+                      </a>
+                    </li>
+                    {% if inv.document %}
+                    <li>
+                      <a class="dropdown-item" target="_blank" href="{% url 'tracker:invoice_document_view' pk=inv.id %}">
+                        <i class="fa fa-external-link-alt me-2 text-info"></i>Open Uploaded Invoice
+                      </a>
+                    </li>
+                    <li>
+                      <a class="dropdown-item" href="{% url 'tracker:invoice_document_download' pk=inv.id %}">
+                        <i class="fa fa-download me-2 text-dark"></i>Download Uploaded Invoice
+                      </a>
+                    </li>
+                    {% endif %}
+                    {% else %}
+                    <li>
+                      <a class="dropdown-item" href="{% url 'tracker:invoice_create_from_order' order_id=o.id %}">
+                        <i class="fa fa-plus me-2 text-primary"></i>Create / Upload Invoice
+                      </a>
+                    </li>
+                    {% endif %}
+                    {% endwith %}
+                    <li><hr class="dropdown-divider my-1"></li>
                     <li>
                       <form method="post" action="{% url 'tracker:order_delete' pk=o.id %}"
                             onsubmit="return confirm('Are you sure you want to delete this order?');">
