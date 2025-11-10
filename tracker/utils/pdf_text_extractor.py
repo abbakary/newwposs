@@ -446,25 +446,30 @@ def parse_invoice_data(text: str) -> dict:
                 else:
                     address = None  # Reset if too short
 
-    # Pattern 2: If P.O.BOX not found, look for explicit address patterns
+    # Pattern 2: If P.O.BOX not found, look for explicit "Address" label
     if not address:
         for idx, line in enumerate(lines):
-            # Look for "Address:" or similar label
-            if re.search(r'Address\s*[:=]?\s*', line, re.I):
-                # Extract what comes after Address label on same line or next lines
-                match = re.search(r'Address\s*[:=]?\s*([^\n]*)', line, re.I)
+            # Look for "Address:" or "Address" at end of line
+            if re.search(r'\bAddress\s*[:=]?\s*$', line, re.I) or re.search(r'\bAddress\s*[:=]\s*([^\n]+)', line, re.I):
                 address_parts = []
+
+                # Check if there's content after "Address:" on the same line
+                match = re.search(r'\bAddress\s*[:=]\s*([^\n]+)', line, re.I)
                 if match and match.group(1).strip():
                     address_parts.append(match.group(1).strip())
 
-                # Collect following lines until we hit a label
-                for j in range(idx + 1, min(idx + 5, len(lines))):
+                # Collect following lines for full address (up to 6 lines)
+                for j in range(idx + 1, min(idx + 7, len(lines))):
                     next_line = lines[j].strip()
 
-                    # Stop at field labels
-                    if not next_line or re.match(r'^(?:Tel|Fax|Attended|Kind|Reference|PI|Code|Type|Date|Email|Phone|Del|Customer|Remarks|Payment|Delivery)', next_line, re.I):
+                    # Stop at empty lines or field labels
+                    if not next_line:
                         break
 
+                    if re.match(r'^(?:Tel|Fax|Attended|Kind|Reference|PI|Code|Type|Date|Email|Phone|Del|Customer|Cust|Remarks|Payment|Delivery|Ref|Invoice|Proforma)', next_line, re.I):
+                        break
+
+                    # Add address lines
                     address_parts.append(next_line)
 
                 if address_parts:
