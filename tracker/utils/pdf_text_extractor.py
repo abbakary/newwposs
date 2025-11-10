@@ -381,32 +381,51 @@ def parse_invoice_data(text: str) -> dict:
             # Too long to be a name, probably corrupted
             customer_name = None
 
-    # Extract address - improved to handle multi-line addresses
+    # Extract address - improved to handle multi-line addresses and avoid rate values
     address = None
 
-    # Pattern 1: Standard "Address:" format
-    address_pattern = re.compile(r'Address\s*[:=]?\s*(.+?)(?=\n(?:Tel|Attended|Kind|Reference|PI|Code|Fax|Del\.|Remarks|NOTE|Payment|Delivery|Email)\b|$)', re.I | re.MULTILINE | re.DOTALL)
+    # Pattern 1: Look for "Address :" followed by actual address (not numbers like "Rate 100,000.00")
+    # The key is to match lines that contain address keywords (P.O.BOX, Street, City, Country) or locations
+    address_pattern = re.compile(r'Address\s*[:=]?\s*([^\n:]+(?:\n[^\n:]+)*)(?=\n(?:Tel|Fax|Del\.|Attended|Kind|Reference|PI|Code|Remarks|NOTE|Payment|Delivery|Type|Email)\b|$)', re.I | re.MULTILINE)
     address_match = address_pattern.search(normalized_text)
 
     if address_match:
         address_text = address_match.group(1).strip()
-        # Clean up the address text - remove trailing labels/keywords
-        address_text = re.sub(r'\s+(?:Tel|Phone|Fax|Attended|Kind|Reference|Ref\.|Date|PI|Code|Type|Payment|Delivery|Remarks|NOTE|Qty|Rate|Value|Email|Customer)\b.*', '', address_text, flags=re.I).strip()
-        # Keep newlines in address for readability (they're often multi-line)
-        address_text = ' '.join(line.strip() for line in address_text.split('\n') if line.strip())
+        # Clean up: remove lines that are just "Rate 100,000.00" or other numeric artifacts
+        lines = address_text.split('\n')
+        cleaned_lines = []
+        for line in lines:
+            stripped = line.strip()
+            # Skip lines that are purely numeric or "Rate/Value" patterns
+            if not stripped:
+                continue
+            # Skip "Rate X" or "Value X" patterns
+            if re.match(r'^(?:Rate|Value|Qty|Type|UNT|Kind|Attended|Reference|Fax|Ref)\b', stripped, re.I):
+                break
+            # Keep lines that look like address (have words, not just numbers)
+            if not re.match(r'^[\d\.\,]+$', stripped):
+                cleaned_lines.append(stripped)
+
+        address_text = ' '.join(cleaned_lines) if cleaned_lines else None
+        if address_text:
+            # Remove trailing labels
+            address_text = re.sub(r'\s+(?:Tel|Phone|Fax|Attended|Kind|Reference|Ref\.|Date|PI|Code|Type|Payment|Delivery|Remarks|NOTE|Qty|Rate|Value|Email)\b.*', '', address_text, flags=re.I).strip()
+
         if address_text and len(address_text) > 2:
             address = address_text
 
-    # Pattern 2: If not found, look for multi-line address after "Address" keyword
+    # Pattern 2: If not found, look for P.O.BOX pattern which is common in invoices
     if not address:
-        m = re.search(r'Address\s+([A-Z][^\n]*(?:\n[A-Z][^\n]*){0,3})(?=\n(?:Tel|Attended|Kind|Phone|Email|Payment)|$)', normalized_text, re.I | re.MULTILINE)
+        m = re.search(r'(?:Address[:\s]+)?(P\.O\.BOX[^\n]*(?:\n[^\n]*TANZANIA|DAR)?)', normalized_text, re.I | re.MULTILINE)
         if m:
-            address_text = m.group(1).strip()
-            # Clean up
-            address_text = re.sub(r'\s+(?:Tel|Phone|Fax|Email|Code|PI|Date)\b.*$', '', address_text, flags=re.I).strip()
-            address_text = ' '.join(line.strip() for line in address_text.split('\n') if line.strip())
-            if address_text and len(address_text) > 2:
-                address = address_text
+            address = m.group(1).strip()
+
+    # Pattern 3: Look for explicit location patterns (DAR-ES-SALAAM, TANZANIA, etc.)
+    if not address:
+        m = re.search(r'(P\.O\.?[\s\.]?BOX[^\n]*\n[^\n]*)|([\w\s]+,\s*(?:DAR|NAIROBI|KAMPALA|TANZANIA|KENYA|UGANDA))', normalized_text, re.I | re.MULTILINE)
+        if m:
+            address = m.group(0).strip()
+            address = re.sub(r'\s+(?:Tel|Fax|Reference|PI|Code)\b.*', '', address, flags=re.I).strip()
 
     # Smart fix: If customer_name is empty but address looks like it contains the name
     # Try to split the address and extract name from first line
