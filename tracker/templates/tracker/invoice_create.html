@@ -612,12 +612,17 @@
                 const progressBar = progressWrap ? progressWrap.querySelector('.progress-bar') : null;
                 const errorBox = document.getElementById('uploadError');
                 const reviewModalEl = document.getElementById('extractionReviewModal');
-                const reviewModal = reviewModalEl ? new bootstrap.Modal(reviewModalEl) : null;
+                const reviewModal = reviewModalEl && typeof bootstrap !== 'undefined' ? new bootstrap.Modal(reviewModalEl) : null;
                 const extractedHeader = document.getElementById('extractedHeader');
                 const extractedItemsBody = document.getElementById('extractedItemsBody');
                 const extractedRaw = document.getElementById('extractedRaw');
                 const applyBtn = document.getElementById('applyExtractionBtn');
                 const createBtn = document.getElementById('createFromExtractionBtn');
+
+                if (!uploadBtn || !fileInput || !errorBox) {
+                  console.warn('Invoice upload elements not found. Upload functionality disabled.');
+                  return;
+                }
 
                 function getCSRF(){
                   const name = 'csrftoken=';
