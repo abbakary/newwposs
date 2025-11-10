@@ -719,7 +719,19 @@
                         const paymentMethod = hdr.payment_method || '';
                         const deliveryTerms = hdr.delivery_terms || '';
 
-                        let headerHtml = `<div class="mb-3"><strong>Invoice Information</strong></div>
+                        let sellerInfo = '';
+                        if (hdr.seller_name) {
+                          sellerInfo += `<div class="mb-3"><strong>Seller / Supplier</strong></div>`;
+                          sellerInfo += `<div class="row mb-2"><div class="col-12"><strong>${hdr.seller_name}</strong></div></div>`;
+                          if (hdr.seller_address) sellerInfo += `<div class="row mb-2"><div class="col-12">${hdr.seller_address}</div></div>`;
+                          if (hdr.seller_phone) sellerInfo += `<div class="row mb-2"><div class="col-12"><strong>Phone:</strong> ${hdr.seller_phone}</div></div>`;
+                          if (hdr.seller_email) sellerInfo += `<div class="row mb-2"><div class="col-12"><strong>Email:</strong> ${hdr.seller_email}</div></div>`;
+                          if (hdr.seller_tax_id) sellerInfo += `<div class="row mb-2"><div class="col-12"><strong>Tax ID:</strong> ${hdr.seller_tax_id}</div></div>`;
+                          if (hdr.seller_vat_reg) sellerInfo += `<div class="row mb-2"><div class="col-12"><strong>VAT Reg:</strong> ${hdr.seller_vat_reg}</div></div>`;
+                          sellerInfo += '<hr/>';
+                        }
+
+                        let headerHtml = sellerInfo + `<div class="mb-3"><strong>Invoice Information</strong></div>
                           <div class="row mb-2">
                             <div class="col-md-6"><strong>Invoice No:</strong> ${invoiceNo}</div>
                             <div class="col-md-6"><strong>Date:</strong> ${date}</div>
