@@ -446,17 +446,22 @@ class OrderService:
         customer: Customer,
         vehicle: Optional[Vehicle] = None,
         description: Optional[str] = None,
+        service_selection: Optional[list] = None,
+        estimated_duration: Optional[int] = None,
         **kwargs
     ) -> Order:
         """
         Update a started order with finalized details from invoice creation.
         Used to sync customer/vehicle info from invoice back to the order.
+        Also handles service selection and ETA calculation if provided.
 
         Args:
             order: The Order to update
             customer: The Customer (may be existing or newly created)
             vehicle: Optional Vehicle to associate
             description: Updated order description
+            service_selection: Optional list of selected service names (for service orders)
+            estimated_duration: Optional estimated duration in minutes (overrides auto-calculation)
             **kwargs: Additional fields to update
 
         Returns:
@@ -479,10 +484,38 @@ class OrderService:
                 if description:
                     order.description = description
 
+                # Handle service selection and ETA calculation
+                if service_selection and order.type == 'service':
+                    # Update description with selected services
+                    desc = order.description or ""
+                    desc_services = "Selected services: " + ", ".join(service_selection)
+                    if desc and not desc.lower().startswith('selected services:'):
+                        desc = desc + "\n" + desc_services
+                    else:
+                        desc = desc_services
+                    order.description = desc
+
+                    # Calculate estimated duration from selected services
+                    if not estimated_duration:
+                        try:
+                            from tracker.models import ServiceType
+                            service_types = ServiceType.objects.filter(
+                                name__in=service_selection,
+                                is_active=True
+                            )
+                            total_minutes = sum(int(s.estimated_minutes or 0) for s in service_types)
+                            estimated_duration = total_minutes or 50
+                        except Exception:
+                            estimated_duration = 50
+
                 # Update any additional fields
                 for field, value in kwargs.items():
                     if hasattr(order, field) and value is not None:
                         setattr(order, field, value)
+
+                # Set estimated duration if calculated
+                if estimated_duration:
+                    order.estimated_duration = estimated_duration
 
                 # Mark as in progress if still created (customer has arrived and service starts)
                 if order.status == 'created':

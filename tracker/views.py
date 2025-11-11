@@ -318,60 +318,66 @@ def dashboard(request: HttpRequest):
         # Count of out of stock items
         out_of_stock_count = InventoryItem.objects.filter(quantity=0).count()
         
-        # Revenue aggregation from Invoices and Payments
+        # Revenue aggregation from Invoices (Net Value = subtotal, excludes VAT)
         from decimal import Decimal
         from django.db.models import Sum
         from tracker.models import Invoice, InvoicePayment
 
-        total_revenue = Decimal('0')  # Cash received (payments)
-        revenue_this_month = Decimal('0')  # Payments this month
-        total_vat = Decimal('0')
-        vat_this_month = Decimal('0')
-        total_gross = Decimal('0')
-        gross_this_month = Decimal('0')
-        total_invoiced = Decimal('0')  # Accrual: invoices issued
-        invoiced_this_month = Decimal('0')
-        revenue_by_branch = {}
-        revenue_by_branch_tsh = {}
+        total_revenue = Decimal('0')  # Net revenue (subtotal from all invoices)
+        revenue_this_month = Decimal('0')  # Net revenue this month
+        total_vat = Decimal('0')  # Total VAT from all invoices
+        vat_this_month = Decimal('0')  # VAT this month
+        total_gross = Decimal('0')  # Gross value (total_amount = subtotal + VAT)
+        gross_this_month = Decimal('0')  # Gross this month
+        total_invoiced = Decimal('0')  # Accrual: invoices issued (total_amount)
+        invoiced_this_month = Decimal('0')  # Invoiced this month (total_amount)
+        revenue_by_branch = {}  # Revenue by branch (Net Value)
+        revenue_by_branch_tsh = {}  # TSHS-specific view
         try:
             # Scope invoices to user's branch/permissions
             invoices_qs = scope_queryset(Invoice.objects.all(), request.user, request)
 
-            # Total invoiced (sum of invoice amounts regardless of payment status)
-            inv_sums = invoices_qs.aggregate(total_invoiced=Sum('total_amount'), total_vat=Sum('tax_amount'))
-            if inv_sums.get('total_invoiced'):
-                total_invoiced = Decimal(inv_sums.get('total_invoiced'))
+            # Net revenue (subtotal excluding VAT) - this is the primary revenue metric
+            # and is now calculated from extracted invoices as well as manually created ones
+            inv_sums = invoices_qs.aggregate(
+                total_net=Sum('subtotal'),
+                total_vat=Sum('tax_amount'),
+                total_gross=Sum('total_amount')
+            )
+            if inv_sums.get('total_net'):
+                total_revenue = Decimal(str(inv_sums.get('total_net')))
             if inv_sums.get('total_vat'):
-                total_vat = Decimal(inv_sums.get('total_vat'))
+                total_vat = Decimal(str(inv_sums.get('total_vat')))
+            if inv_sums.get('total_gross'):
+                total_gross = Decimal(str(inv_sums.get('total_gross')))
 
-            # Payments (cash) - sum of payment amounts for invoices in scope
-            payments_qs = InvoicePayment.objects.filter(invoice__in=invoices_qs)
-            pay_sums = payments_qs.aggregate(total_paid=Sum('amount'))
-            if pay_sums.get('total_paid'):
-                total_revenue = Decimal(pay_sums.get('total_paid'))
+            # For backward compatibility, keep total_invoiced as total_amount
+            total_invoiced = total_gross
 
             # Month ranges
             month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-            inv_month_sums = invoices_qs.filter(invoice_date__gte=month_start).aggregate(month_invoiced=Sum('total_amount'), month_vat=Sum('tax_amount'))
-            if inv_month_sums.get('month_invoiced'):
-                invoiced_this_month = Decimal(inv_month_sums.get('month_invoiced'))
+            # Monthly revenue (Net = subtotal)
+            inv_month_sums = invoices_qs.filter(invoice_date__gte=month_start).aggregate(
+                month_net=Sum('subtotal'),
+                month_vat=Sum('tax_amount'),
+                month_gross=Sum('total_amount')
+            )
+            if inv_month_sums.get('month_net'):
+                revenue_this_month = Decimal(str(inv_month_sums.get('month_net')))
             if inv_month_sums.get('month_vat'):
-                vat_this_month = Decimal(inv_month_sums.get('month_vat'))
+                vat_this_month = Decimal(str(inv_month_sums.get('month_vat')))
+            if inv_month_sums.get('month_gross'):
+                gross_this_month = Decimal(str(inv_month_sums.get('month_gross')))
 
-            pay_month_sums = payments_qs.filter(payment_date__gte=month_start).aggregate(month_paid=Sum('amount'))
-            if pay_month_sums.get('month_paid'):
-                revenue_this_month = Decimal(pay_month_sums.get('month_paid'))
+            # For backward compatibility
+            invoiced_this_month = gross_this_month
 
-            # Gross values: if invoices store gross separately use that, otherwise approximate as total_amount
-            total_gross = total_invoiced
-            gross_this_month = invoiced_this_month
-
-            # Revenue by branch (group invoices total_amount by branch name)
-            rows = invoices_qs.values_list('total_amount', 'branch__name')
-            for total_amt, branch_name in rows:
+            # Revenue by branch (Net Value = subtotal, excluding VAT)
+            rows = invoices_qs.values_list('subtotal', 'branch__name')
+            for subtotal_amt, branch_name in rows:
                 try:
-                    amount = Decimal(total_amt) if total_amt is not None else Decimal('0')
+                    amount = Decimal(str(subtotal_amt)) if subtotal_amt is not None else Decimal('0')
                 except Exception:
                     continue
                 b = branch_name or 'Unassigned'
@@ -379,12 +385,12 @@ def dashboard(request: HttpRequest):
                     revenue_by_branch[b] = Decimal('0')
                 revenue_by_branch[b] += amount
 
-            # Build TSHS-specific view using branch totals
+            # Build TSHS-specific view using branch totals (Net)
             for b, amt in revenue_by_branch.items():
                 revenue_by_branch_tsh[b] = amt
 
         except Exception as e:
-            logger.error(f"Error aggregating revenue from invoices/payments: {e}")
+            logger.error(f"Error aggregating revenue from invoices: {e}")
             total_revenue = Decimal('0')
             revenue_this_month = Decimal('0')
             total_vat = Decimal('0')
@@ -398,8 +404,8 @@ def dashboard(request: HttpRequest):
 
         metrics = {
             'total_orders': total_orders,
-            'completed_orders': completed_orders,  # Add this line to include completed orders count
-            'completed_today': completed_today_count,  # Add completed today count
+            'completed_orders': completed_orders,
+            'completed_today': completed_today_count,
             'new_orders_today': new_orders_today,
             'total_customers': total_customers,
             'completion_rate': round(completion_rate, 1),
@@ -409,15 +415,17 @@ def dashboard(request: HttpRequest):
             'new_customers_this_month': new_customers_this_month,
             'pending_inquiries_count': pending_inquiries_count,
             'average_order_value': average_order_value,
-            'total_revenue': total_revenue,            # Cash received (payments)
-            'total_paid': total_revenue,
-            'revenue_this_month': revenue_this_month,  # Payments this month
-            'total_invoiced': total_invoiced,          # Accrual total (invoices issued)
+            # Revenue metrics - now calculated from invoice.subtotal (Net Value excluding VAT)
+            # These work for both manually created and extracted invoices
+            'total_revenue': total_revenue,            # Net revenue (subtotal) from all invoices
+            'total_paid': total_revenue,               # Alias for backward compatibility
+            'revenue_this_month': revenue_this_month,  # Net revenue this month
+            'total_invoiced': total_invoiced,          # Gross value (subtotal + VAT) - backward compat
             'invoiced_this_month': invoiced_this_month,
-            'total_vat': total_vat,
-            'vat_this_month': vat_this_month,
-            'total_gross': total_gross,
-            'gross_this_month': gross_this_month,
+            'total_vat': total_vat,                    # Total VAT from all invoices
+            'vat_this_month': vat_this_month,          # VAT this month
+            'total_gross': total_gross,                # Gross value (total_amount = subtotal + VAT)
+            'gross_this_month': gross_this_month,      # Gross this month
             'upcoming_appointments': list(upcoming_appointments.values('id', 'customer__full_name', 'created_at')),
             'top_customers': list(top_customers.values('id', 'full_name', 'order_count', 'phone', 'email', 'total_spent', 'latest_order_date', 'registration_date')),
             'recent_orders': list(orders_qs.select_related("customer").exclude(status="completed").order_by("-created_at").values('id', 'customer__full_name', 'status', 'created_at')[:10]),
@@ -1052,7 +1060,6 @@ def customer_register(request: HttpRequest):
                 messages.error(request, "Please complete Step 1 (customer info) before saving.")
                 return redirect(f"{reverse('tracker:customer_register')}?step=1")
             # Duplicate handling and creation using centralized service
-            from .utils import get_user_branch
             from .services import CustomerService
             user_branch = get_user_branch(request.user)
 
@@ -2838,10 +2845,13 @@ def orders_list(request: HttpRequest):
 def order_edit(request: HttpRequest, pk: int):
     """Edit an existing order"""
     order = get_object_or_404(Order, pk=pk)
-    
+
     if request.method == 'POST':
         form = OrderForm(request.POST, instance=order)
         if form.is_valid():
+            # Track if services are being added for the first time
+            had_no_services_before = not order.estimated_duration or order.estimated_duration == 0
+
             # Handle service selections for service orders
             if order.type == 'service':
                 service_selection = request.POST.getlist('service_selection')
@@ -2850,11 +2860,16 @@ def order_edit(request: HttpRequest, pk: int):
                     desc = order.description or ""
                     desc_services = "Selected services: " + ", ".join(service_selection)
                     if desc:
-                        desc = desc + "\n" + desc_services
+                        # Remove old service description if exists
+                        lines = [l for l in desc.split('\n') if not l.strip().lower().startswith('selected services:')]
+                        if lines:
+                            desc = '\n'.join(lines) + "\n" + desc_services
+                        else:
+                            desc = desc_services
                     else:
                         desc = desc_services
                     form.instance.description = desc
-                    
+
                     # Update estimated duration based on selected services
                     try:
                         from .models import ServiceType
@@ -2863,7 +2878,7 @@ def order_edit(request: HttpRequest, pk: int):
                         form.instance.estimated_duration = total_minutes or 50
                     except Exception:
                         pass
-                        
+
             # Handle tire services for sales orders
             elif order.type == 'sales':
                 tire_services = request.POST.getlist('tire_services')
@@ -2872,31 +2887,40 @@ def order_edit(request: HttpRequest, pk: int):
                     desc = order.description or ""
                     desc_services = "Tire services: " + ", ".join(tire_services)
                     if desc:
-                        desc = desc + "\n" + desc_services
+                        # Remove old tire services description if exists
+                        lines = [l for l in desc.split('\n') if not l.strip().lower().startswith('tire services:')]
+                        if lines:
+                            desc = '\n'.join(lines) + "\n" + desc_services
+                        else:
+                            desc = desc_services
                     else:
                         desc = desc_services
                     form.instance.description = desc
-                    
+
                     # Update estimated duration based on selected tire services
                     try:
                         from .models import ServiceAddon
                         addons = ServiceAddon.objects.filter(name__in=tire_services, is_active=True)
                         total_minutes = sum(int(a.estimated_minutes or 0) for a in addons)
-                        # Add to existing estimated duration if it exists
-                        current_duration = order.estimated_duration or 0
-                        form.instance.estimated_duration = current_duration + total_minutes
+                        # Set estimated duration (don't add to existing as we're replacing)
+                        form.instance.estimated_duration = total_minutes or 50
                     except Exception:
                         pass
-            
+
+            # Ensure started_at is set when order is being progressed from 'created' status
+            # This handles the case where an order was created from an invoice and services are now being added
+            if form.instance.status != 'created' and not form.instance.started_at:
+                form.instance.started_at = timezone.now()
+
             order = form.save()
             messages.success(request, 'Order updated successfully.')
             return redirect('tracker:order_detail', pk=order.pk)
     else:
         form = OrderForm(instance=order)
-    
+
     # Set the vehicle queryset to only include vehicles for this customer
     form.fields['vehicle'].queryset = order.customer.vehicles.all()
-    
+
     return render(request, 'tracker/order_form.html', {
         'form': form,
         'order': order,
@@ -3025,10 +3049,50 @@ def order_detail(request: HttpRequest, pk: int):
     # Get linked invoice (one-to-one relationship)
     invoice = order.invoices.first() if order.invoices.exists() else None
 
+    # Extract services from description for better display
+    selected_services = []
+    if order.description:
+        # Look for "Selected services:", "Services:", or "Tire services:" patterns
+        lines = order.description.split('\n')
+        for line in lines:
+            line_lower = line.strip().lower()
+            if any(line_lower.startswith(prefix) for prefix in ['selected services:', 'services:', 'tire services:', 'add-ons:']):
+                # Extract service names after the colon
+                services_text = line.split(':', 1)[1].strip() if ':' in line else ''
+                if services_text:
+                    services = [s.strip() for s in services_text.split(',') if s.strip()]
+                    selected_services.extend(services)
+
+    # Calculate time metrics
+    time_metrics = {
+        'estimated_minutes': order.estimated_duration,
+        'actual_minutes': order.actual_duration,
+        'started_at': order.started_at,
+        'completed_at': order.completed_at,
+        'created_at': order.created_at,
+    }
+
+    # Calculate elapsed time if order has started
+    if order.started_at:
+        elapsed_seconds = (timezone.now() - order.started_at).total_seconds()
+        time_metrics['elapsed_minutes'] = int(elapsed_seconds // 60)
+    elif order.created_at:
+        elapsed_seconds = (timezone.now() - order.created_at).total_seconds()
+        time_metrics['elapsed_minutes'] = int(elapsed_seconds // 60)
+
+    # Calculate remaining time if order has estimated duration and hasn't completed
+    if order.estimated_duration and not order.completed_at:
+        estimated_end = (order.started_at or order.created_at) + timedelta(minutes=order.estimated_duration)
+        remaining_seconds = (estimated_end - timezone.now()).total_seconds()
+        time_metrics['remaining_minutes'] = max(0, int(remaining_seconds // 60))
+        time_metrics['overdue'] = remaining_seconds < 0
+
     # Prepare context
     context = {
         "order": order,
         "invoice": invoice,
+        "selected_services": selected_services,
+        "time_metrics": time_metrics,
     }
     return render(request, "tracker/order_detail.html", context)
 

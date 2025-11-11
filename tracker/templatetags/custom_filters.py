@@ -324,3 +324,86 @@ def elapsed_minutes(order) -> int:
         return int(max(0, delta.total_seconds() // 60))
     except Exception:
         return 0
+
+
+@register.filter(name='extract_services')
+def extract_services(description: str) -> list:
+    """Extract service names from order description."""
+    if not description:
+        return []
+
+    services = []
+    lines = description.split('\n')
+    for line in lines:
+        line_lower = line.strip().lower()
+        # Look for lines starting with common service labels
+        prefixes = ['selected services:', 'services:', 'tire services:', 'add-ons:']
+        for prefix in prefixes:
+            if line_lower.startswith(prefix):
+                # Extract service names after the colon
+                services_text = line.split(':', 1)[1].strip() if ':' in line else ''
+                if services_text:
+                    service_list = [s.strip() for s in services_text.split(',') if s.strip()]
+                    services.extend(service_list)
+
+    return services
+
+
+@register.filter(name='format_eta_status')
+def format_eta_status(order) -> str:
+    """
+    Format ETA status for display (On estimate, Within 10%, Exceeded estimate).
+    Handles both completed and active orders.
+    """
+    try:
+        if not order.estimated_duration:
+            return "No ETA"
+
+        # Use actual_duration if available (completed order), otherwise calculate elapsed
+        if order.actual_duration:
+            actual_minutes = order.actual_duration
+        else:
+            # Calculate elapsed time from started_at or created_at
+            start_time = order.started_at or order.created_at
+            if not start_time:
+                return "No start time"
+            from django.utils import timezone
+            elapsed_seconds = (timezone.now() - start_time).total_seconds()
+            actual_minutes = int(elapsed_seconds // 60)
+
+        estimated = int(order.estimated_duration)
+
+        # Determine status
+        if actual_minutes <= estimated:
+            return "On estimate"
+        elif actual_minutes <= estimated * 1.10:
+            return "Within 10%"
+        else:
+            return "Exceeded estimate"
+    except Exception:
+        return "Unknown"
+
+
+@register.filter(name='get_remaining_eta_minutes')
+def get_remaining_eta_minutes(order) -> int:
+    """
+    Calculate remaining minutes until ETA is reached.
+    Returns 0 if already exceeded or no ETA.
+    """
+    try:
+        if not order.estimated_duration or order.completed_at:
+            return 0
+
+        start_time = order.started_at or order.created_at
+        if not start_time:
+            return 0
+
+        from django.utils import timezone
+        from datetime import timedelta
+
+        eta_time = start_time + timedelta(minutes=int(order.estimated_duration))
+        remaining_seconds = (eta_time - timezone.now()).total_seconds()
+
+        return max(0, int(remaining_seconds // 60))
+    except Exception:
+        return 0

@@ -180,9 +180,25 @@ def api_create_invoice_from_upload(request):
             customer_type = request.POST.get('customer_type', 'personal')
             plate = (request.POST.get('plate') or '').strip().upper() or None
 
-            # Resolve customer using composite identifier (name + plate) when available
+            # Resolve customer using multiple strategies to prevent duplicates
             customer_obj = None
-            if customer_name and plate:
+
+            # Strategy 1: Find by name + phone with full deduplication logic (most reliable)
+            if customer_name and customer_phone:
+                try:
+                    customer_obj = CustomerService.find_duplicate_customer(
+                        branch=user_branch,
+                        full_name=customer_name,
+                        phone=customer_phone,
+                        organization_name=request.POST.get('organization_name'),
+                        tax_number=request.POST.get('tax_number'),
+                        customer_type=customer_type
+                    )
+                except Exception as e:
+                    logger.warning(f"Duplicate customer check by name+phone failed: {e}")
+
+            # Strategy 2: If not found via name+phone and plate available, try name+plate
+            if not customer_obj and customer_name and plate:
                 try:
                     customer_obj = CustomerService.find_customer_by_name_and_plate(
                         branch=user_branch,
@@ -192,7 +208,7 @@ def api_create_invoice_from_upload(request):
                 except Exception as e:
                     logger.warning(f"Composite name+plate lookup failed: {e}")
 
-            # If not found via name+plate, try finding by name only (as fallback when phone is missing)
+            # Strategy 3: Fallback to name-only lookup (least strict)
             if not customer_obj and customer_name:
                 try:
                     customer_obj = CustomerService.find_customer_by_name_only(
@@ -202,7 +218,7 @@ def api_create_invoice_from_upload(request):
                 except Exception as e:
                     logger.warning(f"Name-only lookup failed: {e}")
 
-            # If found by name (with or without plate), use that customer
+            # If found existing customer, use that customer
             if customer_obj:
                 # Update contact info if we found existing by name+plate or name-only
                 updated = False
