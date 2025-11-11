@@ -274,12 +274,33 @@ def parse_invoice_data(text: str) -> dict:
 
         return None
 
-    # Extract Code No (specific pattern for Superdoll invoices)
-    code_no = extract_field_value([
-        r'Code\s*No',
-        r'Code\s*#',
-        r'Code(?:\s|:)'
-    ])
+    # Extract Code No - IMPROVED PATTERNS
+    code_no = None
+    
+    # Strategy 1: Look for "Code No:" pattern with various formats
+    code_patterns = [
+        r'Code\s*No\s*[:=]\s*([^\n]+?)(?=\n|$)',
+        r'Code\s*#\s*[:=]\s*([^\n]+?)(?=\n|$)',
+        r'Code\s*No\.?\s*[:=]?\s*([A-Z0-9\-]+)',
+        r'Code\s*[:=]\s*([^\n]+?)(?=\n|$)',
+    ]
+    
+    for pattern in code_patterns:
+        m = re.search(pattern, normalized_text, re.I | re.MULTILINE)
+        if m:
+            code_no = m.group(1).strip()
+            # Clean up - remove any trailing field labels
+            code_no = re.sub(r'\s+(?:Customer|Date|Reference|PI|Tel|Phone|Address)\b.*$', '', code_no, flags=re.I).strip()
+            if code_no and len(code_no) > 1:
+                break
+    
+    # Strategy 2: If no explicit Code No found, look for standalone codes in the header section
+    if not code_no:
+        # Look for patterns like "Code: ABC123" or "Code No. XYZ456"
+        header_section = '\n'.join(cleaned_lines[:20])  # First 20 lines for header
+        code_matches = re.findall(r'(?:Code\s*(?:No|#)?\s*[:=]?\s*)([A-Z0-9\-]{3,20})', header_section, re.I)
+        if code_matches:
+            code_no = code_matches[0].strip()
 
     # Helper to validate if text looks like a customer name vs address
     def is_likely_customer_name(text):
@@ -580,22 +601,50 @@ def parse_invoice_data(text: str) -> dict:
         if not reference or reference.upper() == 'NONE' or len(reference) < 2:
             reference = None
 
-    # Extract PI No. / Invoice Number - specifically handle "PI No." format
+    # Extract PI No. / Invoice Number - IMPROVED PATTERNS
     invoice_no = None
-    pi_pattern = re.compile(r'PI\s*(?:No|Number|#)\s*[:=]?\s*([^\n:{{]+?)(?=\n|$)', re.I | re.MULTILINE)
-    pi_match = pi_pattern.search(normalized_text)
+    
+    # Strategy 1: Look for "PI No." pattern with various formats
+    pi_patterns = [
+        r'PI\s*(?:No|Number|#)\s*[:=]\s*([^\n]+?)(?=\n|$)',
+        r'PI\s*No\.?\s*[:=]?\s*([A-Z0-9\-]+)',
+        r'PI\s*[:=]\s*([^\n]+?)(?=\n|$)',
+        r'Proforma\s*Invoice\s*(?:No|Number|#)\s*[:=]\s*([^\n]+?)(?=\n|$)',
+        r'Proforma\s*Invoice\s*[:=]\s*([^\n]+?)(?=\n|$)',
+    ]
+    
+    for pattern in pi_patterns:
+        m = re.search(pattern, normalized_text, re.I | re.MULTILINE)
+        if m:
+            invoice_no = m.group(1).strip()
+            # Clean up trailing whitespace and field names
+            invoice_no = re.sub(r'\s+(?:Date|Cust|Ref|Del|Code|Customer|Address|Tel)\b.*$', '', invoice_no, flags=re.I).strip()
+            if invoice_no and len(invoice_no) > 1:
+                break
 
-    if pi_match:
-        invoice_no = pi_match.group(1).strip()
-        # Clean up trailing whitespace and field names
-        invoice_no = re.sub(r'\s+(?:Date|Cust|Ref|Del|Code)\b.*$', '', invoice_no, flags=re.I).strip()
-
-    # Fallback to "Invoice Number" pattern if PI No not found
+    # Strategy 2: Fallback to "Invoice Number" pattern if PI No not found
     if not invoice_no:
-        invoice_no = extract_field_value([
-            r'Invoice\s*(?:No|Number)',
-            r'Invoice\s*Number'
-        ])
+        invoice_patterns = [
+            r'Invoice\s*(?:No|Number|#)\s*[:=]\s*([^\n]+?)(?=\n|$)',
+            r'Invoice\s*No\.?\s*[:=]?\s*([A-Z0-9\-]+)',
+            r'Invoice\s*[:=]\s*([^\n]+?)(?=\n|$)',
+        ]
+        
+        for pattern in invoice_patterns:
+            m = re.search(pattern, normalized_text, re.I | re.MULTILINE)
+            if m:
+                invoice_no = m.group(1).strip()
+                invoice_no = re.sub(r'\s+(?:Date|Cust|Ref|Del|Code)\b.*$', '', invoice_no, flags=re.I).strip()
+                if invoice_no and len(invoice_no) > 1:
+                    break
+
+    # Strategy 3: Look for standalone invoice numbers in header section
+    if not invoice_no:
+        header_section = '\n'.join(cleaned_lines[:15])  # First 15 lines for header
+        # Look for patterns like INV-123, PI-456, etc.
+        inv_matches = re.findall(r'(?:PI|INV|Invoice)[\s\-]*([A-Z0-9\-]{3,20})', header_section, re.I)
+        if inv_matches:
+            invoice_no = inv_matches[0].strip()
 
     # Extract Date (multiple formats)
     date_str = None
@@ -838,7 +887,16 @@ def parse_invoice_data(text: str) -> dict:
 
             # Extract all numbers from the line
             numbers = re.findall(r'[0-9\,]+\.?\d*', line_stripped)
-            float_numbers = [float(n.replace(',', '')) for n in numbers] if numbers else []
+            float_numbers = []
+            if numbers:
+                for n in numbers:
+                    try:
+                        cleaned = n.replace(',', '').strip()
+                        if cleaned and cleaned != '.' and cleaned != '':
+                            float_numbers.append(float(cleaned))
+                    except (ValueError, AttributeError):
+                        # Skip numbers that can't be converted
+                        continue
 
             # Detect unit/type indicators (PCS, NOS, UNT, HR, KG, etc.)
             unit_match = re.search(r'\b(NOS|PCS|KG|HR|LTR|PIECES?|UNITS?|BOX|CASE|SETS?|PC|KIT|UNT)\b', line_stripped, re.I)
@@ -1092,14 +1150,32 @@ def extract_from_bytes(file_bytes, filename: str = '') -> dict:
         # Format items with all extracted fields
         items = []
         for item in parsed.get('items', []):
-            items.append({
-                'description': item.get('description', ''),
-                'qty': item.get('qty', 1),
-                'unit': item.get('unit'),
-                'code': item.get('code'),
-                'value': float(item.get('value', 0)) if item.get('value') else 0,
-                'rate': float(item.get('rate', 0)) if item.get('rate') else None,
-            })
+            try:
+                value = 0
+                if item.get('value'):
+                    try:
+                        value = float(item.get('value'))
+                    except (ValueError, TypeError):
+                        value = 0
+
+                rate = None
+                if item.get('rate'):
+                    try:
+                        rate = float(item.get('rate'))
+                    except (ValueError, TypeError):
+                        rate = None
+
+                items.append({
+                    'description': item.get('description', ''),
+                    'qty': item.get('qty', 1),
+                    'unit': item.get('unit'),
+                    'code': item.get('code'),
+                    'value': value,
+                    'rate': rate,
+                })
+            except Exception as e:
+                logger.warning(f"Error processing item data: {e}")
+                continue
 
         # Check if we extracted any meaningful data
         has_customer = bool(header.get('customer_name'))

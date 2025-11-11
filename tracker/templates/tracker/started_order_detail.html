@@ -155,15 +155,19 @@
                       </div>
 
                       <div id="startedUploadError" class="alert alert-danger" style="display:none" role="alert"></div>
+                      <div id="extractionSuccess" class="alert alert-success" style="display:none" role="alert">
+                        <i class="fa fa-check-circle me-2"></i>Data extracted successfully! Switch to the <strong>Enter Manually</strong> tab to review and confirm the details.
+                      </div>
                       <div id="startedUploadProgress" class="progress" style="display:none;">
                         <div class="progress-bar progress-bar-striped progress-bar-animated" id="startedUploadProgressBar" role="progressbar" style="width: 0%"></div>
                       </div>
 
                       <div id="uploadedInvoicePreview" style="display:none;" class="card mt-3">
-                        <div class="card-header bg-light">
+                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
                           <strong><i class="fa fa-check-circle me-2 text-success"></i>Extracted Data Preview</strong>
+                          <small class="text-muted">Review the extracted data below</small>
                         </div>
-                        <div class="card-body" style="max-height: 500px; overflow-y: auto;">
+                        <div class="card-body" style="max-height: 400px; overflow-y: auto;">
                           <!-- Customer Information -->
                           <div class="mb-3 pb-3 border-bottom">
                             <h6 class="text-muted mb-2"><i class="fa fa-user me-2"></i>Customer Information</h6>
@@ -187,7 +191,7 @@
                             </div>
                           </div>
 
-                          <!-- Invoice Information -->
+                          <!-- Invoice Information - UPDATED WITH CODE NO AND PI NO -->
                           <div class="mb-3 pb-3 border-bottom">
                             <h6 class="text-muted mb-2"><i class="fa fa-file-invoice me-2"></i>Invoice Information</h6>
                             <div class="row g-2">
@@ -196,16 +200,23 @@
                                 <p id="previewInvoiceNo" class="mb-0"><strong>-</strong></p>
                               </div>
                               <div class="col-md-6">
+                                <small class="text-muted d-block">Code No</small>
+                                <p id="previewCodeNo" class="mb-0"><strong>-</strong></p>
+                              </div>
+                              <div class="col-md-6">
+                                <small class="text-muted d-block">PI No</small>
+                                <p id="previewPINO" class="mb-0"><strong>-</strong></p>
+                              </div>
+                              <div class="col-md-6">
                                 <small class="text-muted d-block">Invoice Date</small>
                                 <p id="previewInvoiceDate" class="mb-0"><strong>-</strong></p>
                               </div>
                               <div class="col-md-6">
-                                <small class="text-muted d-block">Reference/Code</small>
-                                <p id="previewCodeNo" class="mb-0">-</p>
+                                <small class="text-muted d-block">Reference</small>
+                                <p id="previewReference" class="mb-0">-</p>
                               </div>
                             </div>
                           </div>
-
 
                           <!-- Payment Information -->
                           <div class="mb-3 pb-3 border-bottom">
@@ -261,15 +272,6 @@
                             <h6 class="text-muted mb-2"><i class="fa fa-sticky-note me-2"></i>Remarks</h6>
                             <p id="previewRemarks" class="mb-0 small">-</p>
                           </div>
-
-                          <div class="d-flex gap-2 mt-3">
-                            <button type="button" id="useExtractedDataBtn" class="btn btn-sm btn-success flex-grow-1">
-                              <i class="fa fa-check me-2"></i>Use This Data
-                            </button>
-                            <button type="button" id="retryUploadBtn" class="btn btn-sm btn-secondary flex-grow-1">
-                              <i class="fa fa-refresh me-2"></i>Try Different File
-                            </button>
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -311,12 +313,23 @@
                                 <input type="email" name="customer_email" class="form-control" placeholder="email@example.com">
                               </div>
                               <div class="col-md-6">
-                                <label class="form-label">Type</label>
-                                <select name="customer_type" class="form-select">
+                                <label class="form-label">Customer Type *</label>
+                                <select name="customer_type" id="invoiceCustomerType" class="form-select" required>
+                                  <option value="">Select customer type</option>
                                   <option value="personal">Personal</option>
-                                  <option value="company">Company</option>
+                                  <option value="company">Private Company</option>
                                   <option value="ngo">NGO</option>
                                   <option value="government">Government</option>
+                                </select>
+                              </div>
+                            </div>
+                            <div class="row mb-2" id="personalSubtypeWrapper" style="display:none;">
+                              <div class="col-md-6">
+                                <label class="form-label">Personal Subtype</label>
+                                <select name="customer_personal_subtype" class="form-select">
+                                  <option value="">Select subtype</option>
+                                  <option value="owner">Owner</option>
+                                  <option value="driver">Driver</option>
                                 </select>
                               </div>
                             </div>
@@ -354,8 +367,7 @@
                             <strong><i class="fa fa-money me-2"></i>Payment Information</strong>
                           </div>
                           <div class="card-body">
-
-                        <div class="row mb-2">
+                            <div class="row mb-2">
                               <div class="col-md-6">
                                 <label class="form-label fw-bold">Subtotal</label>
                                 <div class="input-group">
@@ -386,42 +398,103 @@
 
                         <hr>
 
+                        <!-- Order Type Selection -->
                         <div class="mb-3">
-                          <div class="d-flex justify-content-between align-items-center mb-2">
-                            <label class="form-label fw-bold mb-0">Line Items</label>
-                            <button type="button" class="btn btn-sm btn-outline-primary" id="addLineItemBtn">
-                              <i class="fa fa-plus me-1"></i>Add Item
-                            </button>
+                          <label class="form-label fw-bold">Order Type *</label>
+                          <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check order-type-option" name="order_type" id="orderTypeService" value="service" required>
+                            <label class="btn btn-outline-primary" for="orderTypeService">
+                              <i class="fa fa-hammer me-2"></i>Service
+                            </label>
+
+                            <input type="radio" class="btn-check order-type-option" name="order_type" id="orderTypeSales" value="sales" required>
+                            <label class="btn btn-outline-primary" for="orderTypeSales">
+                              <i class="fa fa-shopping-bag me-2"></i>Sales
+                            </label>
                           </div>
-                          <div id="lineItemsContainer">
-                            <div class="line-item-row card mb-2">
-                              <div class="card-body p-2">
-                                <div class="row g-2">
-                                  <div class="col-md-4">
-                                    <input type="text" class="form-control form-control-sm" name="item_description[]" placeholder="Item description" required>
-                                  </div>
-                                  <div class="col-md-1">
-                                    <input type="text" class="form-control form-control-sm" name="item_code[]" placeholder="Code" title="Item code">
-                                  </div>
-                                  <div class="col-md-1">
-                                    <input type="number" class="form-control form-control-sm" name="item_qty[]" placeholder="Qty" value="1" min="1" step="0.01">
-                                  </div>
-                                  <div class="col-md-1">
-                                    <input type="text" class="form-control form-control-sm" name="item_unit[]" placeholder="Unit" title="Unit (PCS, KG, etc)">
-                                  </div>
-                                  <div class="col-md-2">
-                                    <input type="number" class="form-control form-control-sm" name="item_price[]" placeholder="Unit price" step="0.01" min="0" required>
-                                  </div>
-                                  <div class="col-md-1">
-                                    <button type="button" class="btn btn-sm btn-danger remove-item">
-                                      <i class="fa fa-trash"></i>
-                                    </button>
-                                  </div>
-                                </div>
+                        </div>
+
+                        <!-- Service Order Type Section -->
+                        <div id="serviceOrderSection" style="display:none;" class="mb-3">
+                          <div class="card border-success">
+                            <div class="card-header bg-success text-white">
+                              <h6 class="mb-0"><i class="fa fa-list-check me-2"></i>Service Offered</h6>
+                            </div>
+                            <div class="card-body">
+                              <div class="row g-2" id="serviceTypesContainer">
+                                <!-- Service checkboxes will be loaded here -->
                               </div>
+                              <div class="small text-muted mt-2" id="serviceEtaHint" style="display:none;"></div>
                             </div>
                           </div>
                         </div>
+
+                        <!-- Sales Order Type Section -->
+                        <div id="salesOrderSection" style="display:none;" class="mb-3">
+                          <div class="card border-warning">
+                            <div class="card-header bg-warning text-dark">
+                              <h6 class="mb-0"><i class="fa fa-list-check me-2"></i>Tire Service Add-ons</h6>
+                            </div>
+                            <div class="card-body">
+                              <div class="row g-2" id="addonTypesContainer">
+                                <!-- Addon checkboxes will be loaded here -->
+                              </div>
+                              <div class="small text-muted mt-2" id="addonEtaHint" style="display:none;"></div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- Hidden input to store selected services/addons -->
+                        <input type="hidden" name="service_selection" id="serviceSelection" value="">
+                        <input type="hidden" name="estimated_duration" id="estimatedDuration" value="">
+
+                        <style>
+                          .service-checkbox-card, .addon-checkbox-card {
+                            padding: 12px;
+                            border: 2px solid #e0e0e0;
+                            border-radius: 8px;
+                            transition: all 0.2s ease;
+                            cursor: pointer;
+                            height: 100%;
+                            display: flex;
+                            align-items: center;
+                          }
+                          .service-checkbox-card:hover, .addon-checkbox-card:hover {
+                            background-color: #f8f9fa;
+                            border-color: #0d6efd;
+                          }
+                          .service-checkbox-card input[type="checkbox"]:checked + .service-checkbox-label,
+                          .addon-checkbox-card input[type="checkbox"]:checked + .addon-checkbox-label {
+                            color: #0d6efd;
+                            font-weight: 600;
+                          }
+                          .service-checkbox-card input[type="checkbox"]:checked,
+                          .addon-checkbox-card input[type="checkbox"]:checked {
+                            border-color: #0d6efd;
+                            background-color: #0d6efd;
+                          }
+                          .service-checkbox-card input, .addon-checkbox-card input {
+                            margin-right: 8px;
+                            cursor: pointer;
+                            flex-shrink: 0;
+                          }
+                          .service-checkbox-label, .addon-checkbox-label {
+                            cursor: pointer;
+                            margin: 0;
+                            flex: 1;
+                          }
+                          .service-checkbox-content, .addon-checkbox-content {
+                            width: 100%;
+                          }
+                          .service-checkbox-name, .addon-checkbox-name {
+                            font-weight: 500;
+                            margin-bottom: 4px;
+                          }
+                          .service-checkbox-duration, .addon-checkbox-duration {
+                            font-size: 0.875rem;
+                            color: #6c757d;
+                          }
+                        </style>
 
                         <div class="row mb-3">
                           <div class="col-md-6">
@@ -522,6 +595,12 @@
           </div>
 
           <script>
+            // Safe querySelectorAll function with null check
+            function safeQuerySelectorAll(selector, context) {
+              const element = context ? context.querySelectorAll(selector) : document.querySelectorAll(selector);
+              return element || [];
+            }
+
             // Populate options in Edit Order Details modal
             document.getElementById('editOrderDetailsBtn').addEventListener('click', function(){
               const container = document.getElementById('orderServicesContainer');
@@ -533,43 +612,57 @@
               const helpSalesText = 'Selected item and add-ons will be saved to the order. Add-ons will be appended to the order description.';
               const helpServiceText = 'Selected services will be appended to the order description for quick reference.';
 
+              if (!container) {
+                console.error('orderServicesContainer not found');
+                return;
+              }
+
               container.innerHTML = 'Loading...';
-              fetch('{% url "tracker:api_service_types" %}', { method: 'GET', headers: { 'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value, 'X-Requested-With': 'XMLHttpRequest' }})
-                .then(r => {
-                  if (!r.ok) {
-                    console.error('API response not ok:', r.status, r.statusText);
-                  }
-                  return r.json();
-                })
-                .then(data => {
-                  console.log('API response data:', data);
-                  container.innerHTML = '';
-                  const existingDesc = `{{ order.description|default:'' }}`.toLowerCase();
-                  const orderType = ('{{ order.type|default:'' }}').toLowerCase();
-                  const serviceTypes = Array.isArray(data.service_types) ? data.service_types : [];
-                  const addOns = Array.isArray(data.service_addons) ? data.service_addons : [];
-                  const inventoryItems = Array.isArray(data.inventory_items) ? data.inventory_items : [];
-                  console.log('Inventory items loaded:', inventoryItems.length, inventoryItems);
+              fetch('{% url "tracker:api_service_types" %}', { 
+                method: 'GET', 
+                headers: { 
+                  'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value, 
+                  'X-Requested-With': 'XMLHttpRequest' 
+                }
+              })
+              .then(r => {
+                if (!r.ok) {
+                  console.error('API response not ok:', r.status, r.statusText);
+                  throw new Error('API request failed');
+                }
+                return r.json();
+              })
+              .then(data => {
+                console.log('API response data:', data);
+                container.innerHTML = '';
+                const existingDesc = `{{ order.description|default:'' }}`.toLowerCase();
+                const orderType = ('{{ order.type|default:'' }}').toLowerCase();
+                const serviceTypes = Array.isArray(data.service_types) ? data.service_types : [];
+                const addOns = Array.isArray(data.service_addons) ? data.service_addons : [];
+                const inventoryItems = Array.isArray(data.inventory_items) ? data.inventory_items : [];
+                console.log('Inventory items loaded:', inventoryItems.length, inventoryItems);
 
-                  function renderCheckbox(name, mins, isChecked, extraBadge){
-                    const safe = (name||'').replace(/[^A-Za-z0-9_]/g,'_');
-                    const id = 'od_opt_' + safe;
-                    const col = document.createElement('div'); col.className = 'col-md-6';
-                    const badge = extraBadge ? ` <span class="badge bg-light text-dark ms-1">${extraBadge}</span>` : '';
-                    col.innerHTML = `<div class="form-check">
-                      <input class="form-check-input od-option" type="checkbox" id="${id}" name="services" value="${name}" data-minutes="${mins||0}" ${isChecked?'checked':''}>
-                      <label class="form-check-label" for="${id}">${name} <span class="text-muted small">(${mins||0}m)</span>${badge}</label>
-                    </div>`;
-                    container.appendChild(col);
-                  }
+                function renderCheckbox(name, mins, isChecked, extraBadge){
+                  const safe = (name||'').replace(/[^A-Za-z0-9_]/g,'_');
+                  const id = 'od_opt_' + safe;
+                  const col = document.createElement('div'); 
+                  col.className = 'col-md-6';
+                  const badge = extraBadge ? ` <span class="badge bg-light text-dark ms-1">${extraBadge}</span>` : '';
+                  col.innerHTML = `<div class="form-check">
+                    <input class="form-check-input od-option" type="checkbox" id="${id}" name="services" value="${name}" data-minutes="${mins||0}" ${isChecked?'checked':''}>
+                    <label class="form-check-label" for="${id}">${name} <span class="text-muted small">(${mins||0}m)</span>${badge}</label>
+                  </div>`;
+                  container.appendChild(col);
+                }
 
-                  if (orderType === 'sales') {
-                    // Show item selection for sales orders
-                    itemSection.style.display = 'block';
-                    label.textContent = 'Select Add-ons';
-                    helpText.textContent = helpSalesText;
+                if (orderType === 'sales') {
+                  // Show item selection for sales orders
+                  if (itemSection) itemSection.style.display = 'block';
+                  if (label) label.textContent = 'Select Add-ons';
+                  if (helpText) helpText.textContent = helpSalesText;
 
-                    // Populate item selection
+                  // Populate item selection
+                  if (itemSelect) {
                     itemSelect.innerHTML = '<option value="">Select item</option>';
                     if (inventoryItems.length > 0) {
                       console.log('Adding', inventoryItems.length, 'items to dropdown');
@@ -591,84 +684,114 @@
                     console.log('Existing item:', existingItem, 'Brand:', existingBrand);
                     if (existingItem && inventoryItems.length > 0) {
                       const selectedItem = inventoryItems.find(i => i.name === existingItem && i.brand === existingBrand);
-                      if (selectedItem) {
+                      if (selectedItem && brandField) {
                         console.log('Setting selected item:', selectedItem);
                         itemSelect.value = selectedItem.id;
                         brandField.value = selectedItem.brand;
                       }
                     }
 
-                    // Show add-ons for sales
-                    if (addOns.length) {
-                      addOns.forEach(add => {
-                        const checked = existingDesc.indexOf((add.name||'').toLowerCase()) !== -1;
-                        renderCheckbox(add.name, add.estimated_minutes||0, checked, 'Addon');
-                      });
-                    } else {
-                      container.innerHTML = '<div class="text-muted">No add-ons available</div>';
-                    }
-                  } else {
-                    // Hide item selection for service/inquiry orders
-                    itemSection.style.display = 'none';
-                    label.textContent = 'Select Services';
-                    helpText.textContent = helpServiceText;
-
-                    if (serviceTypes.length) {
-                      serviceTypes.forEach(svc => {
-                        const checked = existingDesc.indexOf((svc.name||'').toLowerCase()) !== -1;
-                        renderCheckbox(svc.name, svc.estimated_minutes||0, checked, '');
-                      });
-                    } else {
-                      container.innerHTML = '<div class="text-muted">No services available</div>';
-                    }
-                    // Also show add-ons below services if present
-                    if (addOns.length) {
-                      const hr = document.createElement('div'); hr.className = 'col-12 mt-2'; hr.innerHTML = '<hr>'; container.appendChild(hr);
-                      addOns.forEach(add => {
-                        const checked = existingDesc.indexOf((add.name||'').toLowerCase()) !== -1;
-                        renderCheckbox(add.name, add.estimated_minutes||0, checked, 'Addon');
-                      });
-                    }
+                    // Handle item selection change
+                    itemSelect.addEventListener('change', function(){
+                      console.log('Item selection changed:', this.value);
+                      if (this.value && brandField) {
+                        const selectedItem = inventoryItems.find(i => i.id === parseInt(this.value));
+                        console.log('Selected item found:', selectedItem);
+                        if (selectedItem) {
+                          console.log('Setting brand field to:', selectedItem.brand);
+                          brandField.value = selectedItem.brand;
+                        }
+                      } else if (brandField) {
+                        console.log('Clearing brand field');
+                        brandField.value = '';
+                      }
+                    });
                   }
 
-                  // Handle item selection change
-                  itemSelect.addEventListener('change', function(){
-                    console.log('Item selection changed:', this.value);
-                    if (this.value) {
-                      const selectedItem = inventoryItems.find(i => i.id === parseInt(this.value));
-                      console.log('Selected item found:', selectedItem);
-                      if (selectedItem) {
-                        console.log('Setting brand field to:', selectedItem.brand);
-                        brandField.value = selectedItem.brand;
-                      }
-                    } else {
-                      console.log('Clearing brand field');
-                      brandField.value = '';
-                    }
-                  });
+                  // Show add-ons for sales
+                  if (addOns.length) {
+                    addOns.forEach(add => {
+                      const checked = existingDesc.indexOf((add.name||'').toLowerCase()) !== -1;
+                      renderCheckbox(add.name, add.estimated_minutes||0, checked, 'Addon');
+                    });
+                  } else {
+                    container.innerHTML = '<div class="text-muted">No add-ons available</div>';
+                  }
+                } else {
+                  // Hide item selection for service/inquiry orders
+                  if (itemSection) itemSection.style.display = 'none';
+                  if (label) label.textContent = 'Select Services';
+                  if (helpText) helpText.textContent = helpServiceText;
 
-                  // Attach change listeners for ETA
-                  container.querySelectorAll('.od-option').forEach(cb => cb.addEventListener('change', updateEditOrderEta));
-                  // Initialize ETA on open
+                  if (serviceTypes.length) {
+                    serviceTypes.forEach(svc => {
+                      const checked = existingDesc.indexOf((svc.name||'').toLowerCase()) !== -1;
+                      renderCheckbox(svc.name, svc.estimated_minutes||0, checked, '');
+                    });
+                  } else {
+                    container.innerHTML = '<div class="text-muted">No services available</div>';
+                  }
+                  // Also show add-ons below services if present
+                  if (addOns.length) {
+                    const hr = document.createElement('div'); 
+                    hr.className = 'col-12 mt-2'; 
+                    hr.innerHTML = '<hr>'; 
+                    container.appendChild(hr);
+                    addOns.forEach(add => {
+                      const checked = existingDesc.indexOf((add.name||'').toLowerCase()) !== -1;
+                      renderCheckbox(add.name, add.estimated_minutes||0, checked, 'Addon');
+                    });
+                  }
+                }
+
+                // Wait for DOM to be updated before attaching event listeners
+                setTimeout(() => {
+                  // Attach change listeners for ETA using safe function
+                  const optionElements = safeQuerySelectorAll('.od-option', container);
+                  if (optionElements.length > 0) {
+                    optionElements.forEach(cb => cb.addEventListener('change', updateEditOrderEta));
+                  }
+                  // Initialize ETA after elements are rendered
                   updateEditOrderEta();
-                })
-                .catch(err => {
-                  console.error('Failed to fetch API:', err);
-                  container.innerHTML = '<div class="text-danger">Failed to load options</div>';
-                });
+                }, 100);
+
+              })
+              .catch(err => {
+                console.error('Failed to fetch API:', err);
+                if (container) container.innerHTML = '<div class="text-danger">Failed to load options</div>';
+              });
             });
 
+            // Fixed updateEditOrderEta function with null checks
             function updateEditOrderEta(){
               const hint = document.getElementById('editOrderEtaHint');
               const etaInput = document.getElementById('orderEstimatedDuration');
               let total = 0;
-              document.querySelectorAll('#orderServicesContainer .od-option:checked').forEach(cb => {
-                const m = parseInt(cb.getAttribute('data-minutes')||'0',10); if(!isNaN(m)) total += m;
-              });
-              if (etaInput) { etaInput.value = total > 0 ? String(total) : (etaInput.value || ''); }
+              
+              // Safely get checkboxes
+              const container = document.getElementById('orderServicesContainer');
+              if (!container) return;
+              
+              const checkedOptions = safeQuerySelectorAll('.od-option:checked', container);
+              if (checkedOptions.length > 0) {
+                checkedOptions.forEach(cb => {
+                  const m = parseInt(cb.getAttribute('data-minutes')||'0',10); 
+                  if(!isNaN(m)) total += m;
+                });
+              }
+              
+              if (etaInput) { 
+                etaInput.value = total > 0 ? String(total) : (etaInput.value || ''); 
+              }
+              
               if (hint){
-                if (total>0){ hint.style.display='block'; hint.textContent = 'Estimated total time: ' + total + ' mins'; }
-                else { hint.style.display='none'; hint.textContent=''; }
+                if (total > 0){ 
+                  hint.style.display='block'; 
+                  hint.textContent = 'Estimated total time: ' + total + ' mins'; 
+                } else { 
+                  hint.style.display='none'; 
+                  hint.textContent=''; 
+                }
               }
             }
           </script>
@@ -685,16 +808,14 @@
               const fileInput = document.getElementById('startedOrderInvoiceFile');
               const startedUploadBtn = document.getElementById('startedUploadBtn');
               const startedUploadError = document.getElementById('startedUploadError');
+              const extractionSuccess = document.getElementById('extractionSuccess');
               const uploadProgress = document.getElementById('startedUploadProgress');
               const uploadProgressBar = document.getElementById('startedUploadProgressBar');
               const uploadedInvoicePreview = document.getElementById('uploadedInvoicePreview');
-              const useExtractedDataBtn = document.getElementById('useExtractedDataBtn');
-              const retryUploadBtn = document.getElementById('retryUploadBtn');
 
               // Manual Entry Tab elements
               const manualForm = document.getElementById('manualInvoiceForm');
-              const addLineItemBtn = document.getElementById('addLineItemBtn');
-              const lineItemsContainer = document.getElementById('lineItemsContainer');
+              const manualTab = document.getElementById('invoiceManualTab');
 
               // Storage for extracted data
               let extractedInvoiceData = null;
@@ -708,23 +829,109 @@
               }
 
               function showError(message, isDanger = true){
-                startedUploadError.style.display = 'block';
-                startedUploadError.innerHTML = message;
-                startedUploadError.className = isDanger ? 'alert alert-danger' : 'alert alert-warning';
+                if (startedUploadError) {
+                  startedUploadError.style.display = 'block';
+                  startedUploadError.innerHTML = message;
+                  startedUploadError.className = isDanger ? 'alert alert-danger' : 'alert alert-warning';
+                }
+                if (extractionSuccess) extractionSuccess.style.display = 'none';
               }
 
               function showSuccess(message, isDanger = false){
-                startedUploadError.style.display = 'block';
-                startedUploadError.innerHTML = message;
-                startedUploadError.className = 'alert alert-success';
+                if (extractionSuccess) {
+                  extractionSuccess.style.display = 'block';
+                  extractionSuccess.innerHTML = message;
+                }
+                if (startedUploadError) startedUploadError.style.display = 'none';
               }
 
               function resetForm(){
                 if (fileInput) fileInput.value = '';
-                startedUploadError.style.display = 'none';
-                uploadProgress.style.display = 'none';
-                uploadedInvoicePreview.style.display = 'none';
+                if (startedUploadError) startedUploadError.style.display = 'none';
+                if (extractionSuccess) extractionSuccess.style.display = 'none';
+                if (uploadProgress) uploadProgress.style.display = 'none';
+                if (uploadedInvoicePreview) uploadedInvoicePreview.style.display = 'none';
                 extractedInvoiceData = null;
+              }
+
+              // Function to clean customer name specifically
+              function cleanCustomerName(customerName) {
+                if (!customerName) return '';
+                
+                let cleaned = customerName.trim();
+                
+                // Remove common prefixes and suffixes
+                const patterns = [
+                  /^customer\s*name\s*[:]?\s*/i,
+                  /^customer\s*[:]?\s*/i,
+                  /^name\s*[:]?\s*/i,
+                  /^client\s*name\s*[:]?\s*/i,
+                  /^client\s*[:]?\s*/i,
+                  /^company\s*name\s*[:]?\s*/i,
+                  /^company\s*[:]?\s*/i,
+                  /\s*customer\s*name\s*$/i,
+                  /\s*customer\s*$/i,
+                  /\s*name\s*$/i,
+                  /\s*client\s*name\s*$/i,
+                  /\s*client\s*$/i,
+                  /\s*company\s*name\s*$/i,
+                  /\s*company\s*$/i
+                ];
+                
+                patterns.forEach(pattern => {
+                  cleaned = cleaned.replace(pattern, '');
+                });
+                
+                // Clean up any remaining colons and extra spaces
+                cleaned = cleaned.replace(/^[:]\s*/, '').replace(/\s*[:]$/, '');
+                cleaned = cleaned.replace(/\s+/g, ' ').trim();
+                
+                return cleaned;
+              }
+
+              // Function to clean the extracted header data
+              function cleanExtractedHeader(header) {
+                if (!header) return {};
+                
+                const cleanedHeader = {...header};
+                
+                // Clean customer name
+                if (cleanedHeader.customer_name) {
+                  cleanedHeader.customer_name = cleanCustomerName(cleanedHeader.customer_name);
+                }
+                
+                // Clean phone number (remove labels like "Phone:", "Tel:", etc.)
+                if (cleanedHeader.phone) {
+                  cleanedHeader.phone = cleanedHeader.phone.replace(/^(phone|tel|telephone|mobile|cell)[\s:]*/i, '').trim();
+                }
+                
+                // Clean email (remove labels like "Email:", "E-mail:", etc.)
+                if (cleanedHeader.email) {
+                  cleanedHeader.email = cleanedHeader.email.replace(/^(email|e-mail|mail)[\s:]*/i, '').trim();
+                }
+                
+                // Clean address (remove labels like "Address:", "Location:", etc.)
+                if (cleanedHeader.address) {
+                  cleanedHeader.address = cleanedHeader.address.replace(/^(address|location|addr)[\s:]*/i, '').trim();
+                }
+                
+                // Clean invoice number (remove labels like "Invoice No:", "Invoice #", etc.)
+                if (cleanedHeader.invoice_no) {
+                  cleanedHeader.invoice_no = cleanedHeader.invoice_no.replace(/^(invoice\s*(no|number|#)?[\s:]*)/i, '').trim();
+                }
+                
+                return cleanedHeader;
+              }
+
+              // Safe querySelectorAll function
+              function safeQuerySelectorAll(selector, context) {
+                try {
+                  const element = context ? context.querySelectorAll(selector) : document.querySelectorAll(selector);
+                  return element || [];
+                } catch (error) {
+                  console.error('Error in safeQuerySelectorAll:', error);
+                  return [];
+                }
               }
 
               // ===== Modal Open Handler =====
@@ -738,7 +945,8 @@
               // ===== Upload Tab Handlers =====
               if (startedUploadBtn){
                 startedUploadBtn.addEventListener('click', async function(){
-                  startedUploadError.style.display = 'none';
+                  if (startedUploadError) startedUploadError.style.display = 'none';
+                  if (extractionSuccess) extractionSuccess.style.display = 'none';
 
                   // Validate file selection
                   if (!fileInput || !fileInput.files || !fileInput.files[0]){
@@ -771,8 +979,10 @@
 
                   // Show loading state
                   startedUploadBtn.disabled = true;
-                  uploadProgress.style.display = 'block';
-                  uploadProgressBar.style.width = '50%';
+                  if (uploadProgress) {
+                    uploadProgress.style.display = 'block';
+                    if (uploadProgressBar) uploadProgressBar.style.width = '50%';
+                  }
                   const originalBtnText = startedUploadBtn.innerHTML;
                   startedUploadBtn.innerHTML = '<i class="fa fa-spinner fa-spin me-2"></i>Extracting...';
 
@@ -787,32 +997,35 @@
                       }
                     });
 
-                    uploadProgressBar.style.width = '100%';
+                    if (uploadProgressBar) uploadProgressBar.style.width = '100%';
                     const extractData = await extractResponse.json();
 
                     if (!extractData.success){
-                      uploadProgress.style.display = 'none';
+                      if (uploadProgress) uploadProgress.style.display = 'none';
                       const errorMsg = extractData.message || 'Could not extract data from PDF.';
                       showError(`<i class="fa fa-warning me-2"></i>${errorMsg}<br><small>Switch to <strong>Enter Manually</strong> tab to enter details.</small>`, false);
                       return;
+                    }
+
+                    // Clean the extracted data before using it
+                    if (extractData.header) {
+                      extractData.header = cleanExtractedHeader(extractData.header);
                     }
 
                     // Extraction successful - populate and show form
                     extractedInvoiceData = extractData;
                     populateManualFormWithExtracted(extractData);
                     showExtractedDataPreview(extractData.header, extractData.items);
-                    uploadProgress.style.display = 'none';
-                    uploadProgressBar.style.width = '0%';
+                    if (uploadProgress) uploadProgress.style.display = 'none';
+                    if (uploadProgressBar) uploadProgressBar.style.width = '0%';
 
-                    // Auto-switch to manual tab to show confirmation form
-                    showSuccess('Invoice data extracted! Review and confirm customer details below.', false);
-                    setTimeout(() => {
-                      document.getElementById('invoiceManualTab').click();
-                    }, 500);
+                    // Show success message and preview
+                    showSuccess('Invoice data extracted successfully! Switch to the <strong>Enter Manually</strong> tab to review and confirm the details.');
+                    if (uploadedInvoicePreview) uploadedInvoicePreview.style.display = 'block';
 
                   } catch (err){
                     console.error('Upload error:', err);
-                    uploadProgress.style.display = 'none';
+                    if (uploadProgress) uploadProgress.style.display = 'none';
                     showError(`<i class="fa fa-exclamation-circle me-2"></i>Upload error: ${err && err.message ? err.message : 'Unknown error'}`);
                   } finally {
                     startedUploadBtn.disabled = false;
@@ -822,99 +1035,97 @@
               }
 
               function showExtractedDataPreview(header, items){
+                console.log('Showing extracted data preview:', header);
+                
                 // Customer Information
-                document.getElementById('previewCustomerName').textContent = header.customer_name || '-';
-                document.getElementById('previewCustomerPhone').textContent = header.phone || '-';
-                document.getElementById('previewCustomerEmail').textContent = header.email || '-';
-                document.getElementById('previewCustomerAddress').textContent = header.address || '-';
+                const el1 = document.getElementById('previewCustomerName');
+                if (el1) el1.textContent = header.customer_name || '-';
 
-                // Invoice Information
-                document.getElementById('previewInvoiceNo').textContent = header.invoice_no || '-';
-                document.getElementById('previewInvoiceDate').textContent = header.date || '-';
-                document.getElementById('previewCodeNo').textContent = header.code_no || header.reference || '-';
+                const el2 = document.getElementById('previewCustomerPhone');
+                if (el2) el2.textContent = header.phone || '-';
 
-                // Line Items
-                const itemsContainer = document.getElementById('previewLineItems');
-                if (items && items.length > 0) {
-                  itemsContainer.innerHTML = items.map((item, idx) => `
-                    <div class="d-flex justify-content-between align-items-center mb-1 pb-1 border-bottom">
-                      <div>
-                        <strong>${item.description || '-'}</strong><br>
-                        <small class="text-muted">Qty: ${item.qty || 1}</small>
-                      </div>
-                      <div class="text-end">
-                        <strong>${(item.value || 0).toLocaleString()}</strong>
-                      </div>
-                    </div>
-                  `).join('');
-                } else {
-                  itemsContainer.innerHTML = '<p class="text-muted">-</p>';
-                }
+                const el3 = document.getElementById('previewCustomerEmail');
+                if (el3) el3.textContent = header.email || '-';
+
+                const el4 = document.getElementById('previewCustomerAddress');
+                if (el4) el4.textContent = header.address || '-';
+
+                // Invoice Information - UPDATED WITH CODE NO AND PI NO
+                const el5 = document.getElementById('previewInvoiceNo');
+                if (el5) el5.textContent = header.invoice_no || '-';
+
+                const el6 = document.getElementById('previewCodeNo');
+                if (el6) el6.textContent = header.code_no || '-';
+
+                const el7 = document.getElementById('previewPINO');
+                if (el7) el7.textContent = header.pi_no || header.invoice_no || '-';
+
+                const el8 = document.getElementById('previewInvoiceDate');
+                if (el8) el8.textContent = header.date || '-';
+
+                const el9 = document.getElementById('previewReference');
+                if (el9) el9.textContent = header.reference || '-';
 
                 // Payment Information
-                document.getElementById('previewSubtotal').textContent = (header.subtotal || 0).toLocaleString();
-                document.getElementById('previewTax').textContent = (header.tax || 0).toLocaleString();
-                document.getElementById('previewTotal').textContent = (header.total || 0).toLocaleString();
+                const el10 = document.getElementById('previewSubtotal');
+                if (el10) el10.textContent = (header.subtotal || 0).toLocaleString();
+
+                const el11 = document.getElementById('previewTax');
+                if (el11) el11.textContent = (header.tax || 0).toLocaleString();
+
+                const el12 = document.getElementById('previewTotal');
+                if (el12) el12.textContent = (header.total || 0).toLocaleString();
 
                 // Transaction Details
-                document.getElementById('previewPaymentMethod').textContent = header.payment_method || '-';
-                document.getElementById('previewDeliveryTerms').textContent = header.delivery_terms || '-';
+                const el13 = document.getElementById('previewPaymentMethod');
+                if (el13) el13.textContent = header.payment_method || '-';
+
+                const el14 = document.getElementById('previewDeliveryTerms');
+                if (el14) el14.textContent = header.delivery_terms || '-';
 
                 // Attendee Information
-                document.getElementById('previewAttendedBy').textContent = header.attended_by || '-';
-                document.getElementById('previewKindAttention').textContent = header.kind_attention || '-';
+                const el15 = document.getElementById('previewAttendedBy');
+                if (el15) el15.textContent = header.attended_by || '-';
+
+                const el16 = document.getElementById('previewKindAttention');
+                if (el16) el16.textContent = header.kind_attention || '-';
 
                 // Remarks
-                document.getElementById('previewRemarks').textContent = header.remarks || '-';
+                const el17 = document.getElementById('previewRemarks');
+                if (el17) el17.textContent = header.remarks || '-';
 
-                uploadedInvoicePreview.style.display = 'block';
-              }
-
-              if (useExtractedDataBtn){
-                useExtractedDataBtn.addEventListener('click', function(){
-                  if (extractedInvoiceData && extractedInvoiceData.header){
-                    // Pre-populate extracted data in the extraction form modal
-                    const header = extractedInvoiceData.header;
-                    document.querySelector('input[name="extracted_customer_name"]').value = header.customer_name || '';
-                    document.querySelector('input[name="extracted_phone"]').value = header.phone || '';
-                    document.querySelector('input[name="extracted_email"]').value = header.email || '';
-                    document.querySelector('input[name="extracted_address"]').value = header.address || '';
-                    document.querySelector('textarea[name="extracted_description"]').value = header.remarks || '';
-                    document.querySelector('input[name="extracted_priority"]').value = header.priority || 'medium';
-
-                    // Show the extraction form modal instead of manual form
-                    if (window.extractionFormModal) {
-                      // Close invoice modal
-                      if (modal) modal.hide();
-                      // Open extraction form modal
-                      window.extractionFormModal.open();
-                    } else {
-                      // Fallback to manual form
-                      populateManualFormWithExtracted(extractedInvoiceData);
-                      document.getElementById('invoiceManualTab').click();
-                    }
-                  }
-                });
-              }
-
-              if (retryUploadBtn){
-                retryUploadBtn.addEventListener('click', function(){
-                  resetForm();
-                  if (fileInput) fileInput.click();
-                });
+                if (uploadedInvoicePreview) uploadedInvoicePreview.style.display = 'block';
               }
 
               function populateManualFormWithExtracted(data){
                 const header = data.header || {};
+                console.log('Populating manual form with:', header);
+                
                 if (manualForm){
                   // Populate customer fields
-                  manualForm.querySelector('input[name="customer_name"]').value = header.customer_name || '';
-                  manualForm.querySelector('input[name="customer_phone"]').value = header.phone || '';
-                  manualForm.querySelector('input[name="customer_email"]').value = header.email || '';
-                  manualForm.querySelector('input[name="customer_address"]').value = header.address || '';
+                  const customerNameField = manualForm.querySelector('input[name="customer_name"]');
+                  if (customerNameField) customerNameField.value = header.customer_name || '';
+
+                  const customerPhoneField = manualForm.querySelector('input[name="customer_phone"]');
+                  if (customerPhoneField) customerPhoneField.value = header.phone || '';
+
+                  const customerEmailField = manualForm.querySelector('input[name="customer_email"]');
+                  if (customerEmailField) customerEmailField.value = header.email || '';
+
+                  const customerAddressField = manualForm.querySelector('input[name="customer_address"]');
+                  if (customerAddressField) customerAddressField.value = header.address || '';
+
+                  // Populate customer type (default to personal if not specified)
+                  const customerTypeField = manualForm.querySelector('select[name="customer_type"]');
+                  if (customerTypeField) {
+                    customerTypeField.value = header.customer_type || 'personal';
+                    // Trigger change event to update subtype visibility
+                    customerTypeField.dispatchEvent(new Event('change'));
+                  }
 
                   // Populate invoice fields
-                  manualForm.querySelector('input[name="invoice_number"]').value = header.invoice_no || header.code_no || '';
+                  const invoiceNumberField = manualForm.querySelector('input[name="invoice_number"]');
+                  if (invoiceNumberField) invoiceNumberField.value = header.invoice_no || header.code_no || '';
 
                   // Handle invoice_date - convert from dd/mm/yyyy to yyyy-mm-dd for HTML date input
                   let invoiceDateValue = '';
@@ -926,11 +1137,17 @@
                       invoiceDateValue = header.date;
                     }
                   }
-                  manualForm.querySelector('input[name="invoice_date"]').value = invoiceDateValue;
+                  const invoiceDateField = manualForm.querySelector('input[name="invoice_date"]');
+                  if (invoiceDateField) invoiceDateField.value = invoiceDateValue;
 
-                  manualForm.querySelector('input[name="subtotal"]').value = header.subtotal || '';
-                  manualForm.querySelector('input[name="tax_amount"]').value = header.tax || '';
-                  manualForm.querySelector('input[name="total_amount"]').value = header.total || '';
+                  const subtotalField = manualForm.querySelector('input[name="subtotal"]');
+                  if (subtotalField) subtotalField.value = header.subtotal || '';
+
+                  const taxField = manualForm.querySelector('input[name="tax_amount"]');
+                  if (taxField) taxField.value = header.tax || '';
+
+                  const totalField = manualForm.querySelector('input[name="total_amount"]');
+                  if (totalField) totalField.value = header.total || '';
 
                   // Populate additional fields
                   const remarksField = manualForm.querySelector('textarea[name="remarks"]');
@@ -962,95 +1179,166 @@
                   if (notesField){
                     notesField.value = header.notes || '';
                   }
-
-                  // Clear existing line items and add extracted ones
-                  const existingItems = lineItemsContainer.querySelectorAll('.line-item-row');
-                  if (existingItems.length > 0){
-                    existingItems.forEach((item, idx) => {
-                      if (idx > 0) item.remove();
-                    });
-                  }
-
-                  // Populate items
-                  if (data.items && data.items.length > 0){
-                    const firstItem = existingItems[0];
-                    data.items.forEach((item, idx) => {
-                      if (idx === 0 && firstItem){
-                        firstItem.querySelector('input[name="item_description[]"]').value = item.description || '';
-                        firstItem.querySelector('input[name="item_code[]"]').value = item.code || '';
-                        firstItem.querySelector('input[name="item_qty[]"]').value = item.qty || 1;
-                        firstItem.querySelector('input[name="item_unit[]"]').value = item.unit || '';
-                        firstItem.querySelector('input[name="item_price[]"]').value = item.rate || item.value || '';
-                      } else {
-                        addLineItem();
-                        const items = lineItemsContainer.querySelectorAll('.line-item-row');
-                        const newItem = items[items.length - 1];
-                        newItem.querySelector('input[name="item_description[]"]').value = item.description || '';
-                        newItem.querySelector('input[name="item_code[]"]').value = item.code || '';
-                        newItem.querySelector('input[name="item_qty[]"]').value = item.qty || 1;
-                        newItem.querySelector('input[name="item_unit[]"]').value = item.unit || '';
-                        newItem.querySelector('input[name="item_price[]"]').value = item.rate || item.value || '';
-                      }
-                    });
-                  }
                 }
               }
 
-              // ===== Manual Entry Tab Handlers =====
-              function addLineItem(){
-                const html = `
-                  <div class="line-item-row card mb-2">
-                    <div class="card-body p-2">
-                      <div class="row g-2">
-                        <div class="col-md-4">
-                          <input type="text" class="form-control form-control-sm" name="item_description[]" placeholder="Item description" required>
+              // ===== Customer Type Toggle =====
+              const customerTypeEl = document.getElementById('invoiceCustomerType');
+              const personalSubtypeWrapper = document.getElementById('personalSubtypeWrapper');
+              if (customerTypeEl){
+                function updateSubtypeVisibility(){
+                  if (customerTypeEl.value === 'personal'){
+                    if (personalSubtypeWrapper) personalSubtypeWrapper.style.display = 'block';
+                  } else {
+                    if (personalSubtypeWrapper) personalSubtypeWrapper.style.display = 'none';
+                  }
+                }
+                customerTypeEl.addEventListener('change', updateSubtypeVisibility);
+                updateSubtypeVisibility();
+              }
+
+              // ===== Order Type Selection and Service/Addon Loading =====
+              const orderTypeOptions = safeQuerySelectorAll('.order-type-option');
+              const serviceOrderSection = document.getElementById('serviceOrderSection');
+              const salesOrderSection = document.getElementById('salesOrderSection');
+              const serviceTypesContainer = document.getElementById('serviceTypesContainer');
+              const addonTypesContainer = document.getElementById('addonTypesContainer');
+              const serviceEtaHint = document.getElementById('serviceEtaHint');
+              const addonEtaHint = document.getElementById('addonEtaHint');
+
+              let serviceTypes = [];
+              let addons = [];
+
+              // Load service types and addons from API
+              async function loadServiceData(){
+                try {
+                  const response = await fetch('{% url "tracker:api_service_types" %}', {
+                    headers: {'X-Requested-With': 'XMLHttpRequest'}
+                  });
+                  const data = await response.json();
+                  serviceTypes = data.service_types || [];
+                  addons = data.service_addons || [];
+                  renderServiceCheckboxes();
+                  renderAddonCheckboxes();
+                } catch (err){
+                  console.error('Error loading service data:', err);
+                }
+              }
+
+              function renderServiceCheckboxes(){
+                if (!serviceTypesContainer) return;
+                serviceTypesContainer.innerHTML = '';
+                serviceTypes.forEach((svc, idx) => {
+                  const col = document.createElement('div');
+                  col.className = 'col-md-6 col-lg-4';
+                  col.innerHTML = `
+                    <div class="service-checkbox-card">
+                      <input class="form-check-input service-checkbox" type="checkbox" id="svc_chk_${idx}" name="service_selection_chk" value="${svc.name}" data-minutes="${svc.estimated_minutes}">
+                      <label class="service-checkbox-label" for="svc_chk_${idx}">
+                        <div class="service-checkbox-content">
+                          <div class="service-checkbox-name">${svc.name}</div>
+                          <div class="service-checkbox-duration"><i class="fa fa-clock-o me-1"></i>${svc.estimated_minutes} mins</div>
                         </div>
-                        <div class="col-md-1">
-                          <input type="text" class="form-control form-control-sm" name="item_code[]" placeholder="Code" title="Item code">
-                        </div>
-                        <div class="col-md-1">
-                          <input type="number" class="form-control form-control-sm" name="item_qty[]" placeholder="Qty" value="1" min="1" step="0.01">
-                        </div>
-                        <div class="col-md-1">
-                          <input type="text" class="form-control form-control-sm" name="item_unit[]" placeholder="Unit" title="Unit (PCS, KG, etc)">
-                        </div>
-                        <div class="col-md-2">
-                          <input type="number" class="form-control form-control-sm" name="item_price[]" placeholder="Unit price" step="0.01" min="0" required>
-                        </div>
-                        <div class="col-md-1">
-                          <button type="button" class="btn btn-sm btn-danger remove-item">
-                            <i class="fa fa-trash"></i>
-                          </button>
-                        </div>
-                      </div>
+                      </label>
                     </div>
-                  </div>
-                `;
-                const div = document.createElement('div');
-                div.innerHTML = html;
-                const itemRow = div.querySelector('.line-item-row');
-                lineItemsContainer.appendChild(itemRow);
-
-                itemRow.querySelector('.remove-item').addEventListener('click', function(e){
-                  e.preventDefault();
-                  itemRow.remove();
+                  `;
+                  serviceTypesContainer.appendChild(col);
                 });
+                updateServiceEta();
               }
 
-              if (addLineItemBtn){
-                addLineItemBtn.addEventListener('click', function(e){
-                  e.preventDefault();
-                  addLineItem();
+              function renderAddonCheckboxes(){
+                if (!addonTypesContainer) return;
+                addonTypesContainer.innerHTML = '';
+                addons.forEach((addon, idx) => {
+                  const col = document.createElement('div');
+                  col.className = 'col-md-6 col-lg-4';
+                  col.innerHTML = `
+                    <div class="addon-checkbox-card">
+                      <input class="form-check-input addon-checkbox" type="checkbox" id="addon_chk_${idx}" name="tire_services_chk" value="${addon.name}" data-minutes="${addon.estimated_minutes}">
+                      <label class="addon-checkbox-label" for="addon_chk_${idx}">
+                        <div class="addon-checkbox-content">
+                          <div class="addon-checkbox-name">${addon.name}</div>
+                          <div class="addon-checkbox-duration"><i class="fa fa-clock-o me-1"></i>${addon.estimated_minutes} mins</div>
+                        </div>
+                      </label>
+                    </div>
+                  `;
+                  addonTypesContainer.appendChild(col);
                 });
+                updateAddonEta();
               }
 
-              // Remove line item handler (delegated)
-              lineItemsContainer.addEventListener('click', function(e){
-                if (e.target.closest('.remove-item')){
-                  e.preventDefault();
-                  e.target.closest('.line-item-row').remove();
+              function updateServiceEta(){
+                if (!serviceTypesContainer) return;
+                const checked = safeQuerySelectorAll('.service-checkbox:checked', serviceTypesContainer);
+                let totalMinutes = 0;
+                checked.forEach(chk => {
+                  totalMinutes += parseInt(chk.dataset.minutes || 0);
+                });
+                const serviceSelection = Array.from(checked).map(c => c.value).join(',');
+                const serviceSelInput = document.getElementById('serviceSelection');
+                const estimatedDurInput = document.getElementById('estimatedDuration');
+                if (serviceSelInput) serviceSelInput.value = serviceSelection;
+                if (estimatedDurInput) estimatedDurInput.value = totalMinutes;
+                if (serviceEtaHint){
+                  if (totalMinutes > 0){
+                    serviceEtaHint.textContent = `Estimated duration: ${totalMinutes} minutes`;
+                    serviceEtaHint.style.display = 'block';
+                  } else {
+                    serviceEtaHint.style.display = 'none';
+                  }
                 }
-              });
+              }
+
+              function updateAddonEta(){
+                if (!addonTypesContainer) return;
+                const checked = safeQuerySelectorAll('.addon-checkbox:checked', addonTypesContainer);
+                let totalMinutes = 0;
+                checked.forEach(chk => {
+                  totalMinutes += parseInt(chk.dataset.minutes || 0);
+                });
+                const addonSelection = Array.from(checked).map(c => c.value).join(',');
+                const serviceSelInput = document.getElementById('serviceSelection');
+                const estimatedDurInput = document.getElementById('estimatedDuration');
+                if (serviceSelInput) serviceSelInput.value = addonSelection;
+                if (estimatedDurInput) estimatedDurInput.value = totalMinutes;
+                if (addonEtaHint){
+                  if (totalMinutes > 0){
+                    addonEtaHint.textContent = `Estimated duration: ${totalMinutes} minutes`;
+                    addonEtaHint.style.display = 'block';
+                  } else {
+                    addonEtaHint.style.display = 'none';
+                  }
+                }
+              }
+
+              if (orderTypeOptions && orderTypeOptions.length > 0){
+                orderTypeOptions.forEach(option => {
+                  option.addEventListener('change', function(){
+                    if (this.value === 'service'){
+                      if (serviceOrderSection) serviceOrderSection.style.display = 'block';
+                      if (salesOrderSection) salesOrderSection.style.display = 'none';
+                    } else {
+                      if (serviceOrderSection) serviceOrderSection.style.display = 'none';
+                      if (salesOrderSection) salesOrderSection.style.display = 'block';
+                    }
+                  });
+                });
+              }
+
+              // Attach listeners to service/addon checkboxes
+              if (serviceTypesContainer){
+                serviceTypesContainer.addEventListener('change', updateServiceEta);
+              }
+              if (addonTypesContainer){
+                addonTypesContainer.addEventListener('change', updateAddonEta);
+              }
+
+              // Load service data on modal open
+              if (serviceTypesContainer || addonTypesContainer){
+                loadServiceData();
+              }
 
               // Handle manual form submission
               if (manualForm){
@@ -1058,12 +1346,22 @@
                   e.preventDefault();
 
                   // Validate required fields
-                  const customerName = this.querySelector('input[name="customer_name"]').value.trim();
-                  const customerPhone = this.querySelector('input[name="customer_phone"]').value.trim();
-                  const totalAmount = this.querySelector('input[name="total_amount"]').value.trim();
+                  const customerName = this.querySelector('input[name="customer_name"]');
+                  const customerPhone = this.querySelector('input[name="customer_phone"]');
+                  const customerType = this.querySelector('select[name="customer_type"]');
+                  const totalAmount = this.querySelector('input[name="total_amount"]');
+                  const orderType = this.querySelector('input[name="order_type"]:checked');
 
-                  if (!customerName || !customerPhone || !totalAmount){
-                    showError('<i class="fa fa-warning me-2"></i>Please fill in customer name, phone, and total amount.');
+                  if (!customerName || !customerName.value.trim() || 
+                      !customerPhone || !customerPhone.value.trim() || 
+                      !customerType || !customerType.value.trim() || 
+                      !totalAmount || !totalAmount.value.trim()){
+                    showError('<i class="fa fa-warning me-2"></i>Please fill in customer name, phone, customer type, and total amount.');
+                    return;
+                  }
+
+                  if (!orderType){
+                    showError('<i class="fa fa-warning me-2"></i>Please select an order type (Service or Sales).');
                     return;
                   }
 
@@ -1077,8 +1375,10 @@
                   const submitBtn = this.querySelector('button[type="submit"]');
                   const originalBtnText = submitBtn.innerHTML;
                   submitBtn.disabled = true;
-                  uploadProgress.style.display = 'block';
-                  uploadProgressBar.style.width = '50%';
+                  if (uploadProgress) {
+                    uploadProgress.style.display = 'block';
+                    if (uploadProgressBar) uploadProgressBar.style.width = '50%';
+                  }
 
                   try {
                     // Call the create-from-upload API endpoint
@@ -1091,7 +1391,7 @@
                       }
                     });
 
-                    uploadProgressBar.style.width = '100%';
+                    if (uploadProgressBar) uploadProgressBar.style.width = '100%';
                     const result = await response.json();
 
                     if (result.success){
@@ -1101,14 +1401,14 @@
                       }, 1000);
                     } else {
                       showError(`<i class="fa fa-exclamation-circle me-2"></i>${result.message || 'Failed to create invoice'}`);
-                      uploadProgress.style.display = 'none';
-                      uploadProgressBar.style.width = '0%';
+                      if (uploadProgress) uploadProgress.style.display = 'none';
+                      if (uploadProgressBar) uploadProgressBar.style.width = '0%';
                     }
                   } catch (err){
                     console.error('Form submission error:', err);
                     showError(`<i class="fa fa-exclamation-circle me-2"></i>Error: ${err.message}`);
-                    uploadProgress.style.display = 'none';
-                    uploadProgressBar.style.width = '0%';
+                    if (uploadProgress) uploadProgress.style.display = 'none';
+                    if (uploadProgressBar) uploadProgressBar.style.width = '0%';
                   } finally {
                     submitBtn.disabled = false;
                     submitBtn.innerHTML = originalBtnText;
@@ -1265,7 +1565,7 @@
               <div>
                 <h6 class="mb-1"><i class="fa fa-file-pdf me-2" style="color: #dc3545;"></i>{{ doc.file_name }}</h6>
                 <small class="text-muted">
-                  {{ doc.document_type|upper }} • {{ doc.uploaded_at|date:"M d, Y H:i" }}
+                  {{ doc.document_type|upper }} �� {{ doc.uploaded_at|date:"M d, Y H:i" }}
                 </small>
               </div>
               <span class="badge bg-{% if doc.extraction_status == 'completed' %}success{% elif doc.extraction_status == 'processing' %}warning{% else %}danger{% endif %}">

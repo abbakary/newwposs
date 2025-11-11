@@ -4617,7 +4617,7 @@ def api_notifications_summary(request: HttpRequest):
     low_stock = [{
         'id': i.id,
         'name': i.name,
-        'brand': i.brand or 'Unbranded',
+        'brand': i.brand.name if i.brand else 'Unbranded',
         'quantity': i.quantity
     } for i in low_qs[:8]]
 
