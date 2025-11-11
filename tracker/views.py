@@ -1060,7 +1060,6 @@ def customer_register(request: HttpRequest):
                 messages.error(request, "Please complete Step 1 (customer info) before saving.")
                 return redirect(f"{reverse('tracker:customer_register')}?step=1")
             # Duplicate handling and creation using centralized service
-            from .utils import get_user_branch
             from .services import CustomerService
             user_branch = get_user_branch(request.user)
 
