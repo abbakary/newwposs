@@ -3050,10 +3050,50 @@ def order_detail(request: HttpRequest, pk: int):
     # Get linked invoice (one-to-one relationship)
     invoice = order.invoices.first() if order.invoices.exists() else None
 
+    # Extract services from description for better display
+    selected_services = []
+    if order.description:
+        # Look for "Selected services:", "Services:", or "Tire services:" patterns
+        lines = order.description.split('\n')
+        for line in lines:
+            line_lower = line.strip().lower()
+            if any(line_lower.startswith(prefix) for prefix in ['selected services:', 'services:', 'tire services:', 'add-ons:']):
+                # Extract service names after the colon
+                services_text = line.split(':', 1)[1].strip() if ':' in line else ''
+                if services_text:
+                    services = [s.strip() for s in services_text.split(',') if s.strip()]
+                    selected_services.extend(services)
+
+    # Calculate time metrics
+    time_metrics = {
+        'estimated_minutes': order.estimated_duration,
+        'actual_minutes': order.actual_duration,
+        'started_at': order.started_at,
+        'completed_at': order.completed_at,
+        'created_at': order.created_at,
+    }
+
+    # Calculate elapsed time if order has started
+    if order.started_at:
+        elapsed_seconds = (timezone.now() - order.started_at).total_seconds()
+        time_metrics['elapsed_minutes'] = int(elapsed_seconds // 60)
+    elif order.created_at:
+        elapsed_seconds = (timezone.now() - order.created_at).total_seconds()
+        time_metrics['elapsed_minutes'] = int(elapsed_seconds // 60)
+
+    # Calculate remaining time if order has estimated duration and hasn't completed
+    if order.estimated_duration and not order.completed_at:
+        estimated_end = (order.started_at or order.created_at) + timedelta(minutes=order.estimated_duration)
+        remaining_seconds = (estimated_end - timezone.now()).total_seconds()
+        time_metrics['remaining_minutes'] = max(0, int(remaining_seconds // 60))
+        time_metrics['overdue'] = remaining_seconds < 0
+
     # Prepare context
     context = {
         "order": order,
         "invoice": invoice,
+        "selected_services": selected_services,
+        "time_metrics": time_metrics,
     }
     return render(request, "tracker/order_detail.html", context)
 
