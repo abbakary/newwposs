@@ -147,6 +147,18 @@ def extract_header_fields(text):
     invoice_no = extract_field(r'(?:PI\s*(?:No|Number)|Invoice\s*(?:No|Number))')
     code_no = extract_field(r'Code\s*(?:No|Number|#)')
     customer_name = extract_field(r'Customer\s*Name')
+
+    # Clean up customer_name to remove duplicate labels (e.g., "CUSTOMER NAME Customer Name")
+    if customer_name:
+        # Remove case-insensitive "Customer Name", "Customer", or similar patterns from the extracted value
+        customer_name = re.sub(r'(?:Customer\s*Name|Customer)\s*(?:Name)?(?:\s+Customer)?(?:\s+Name)?$', '', customer_name, flags=re.IGNORECASE).strip()
+        # Also remove if it starts with such patterns
+        customer_name = re.sub(r'^(?:Customer\s*Name|Customer)\s*(?:Name)?\s*', '', customer_name, flags=re.IGNORECASE).strip()
+        # Clean up any remaining duplicate name patterns
+        parts = customer_name.split()
+        if len(parts) > 1 and parts[0].lower() == parts[-1].lower():
+            customer_name = ' '.join(parts[:-1])
+
     address = extract_field(r'Address')
     date_str = extract_field(r'Date')
     phone = extract_field(r'(?:Tel|Telephone)')

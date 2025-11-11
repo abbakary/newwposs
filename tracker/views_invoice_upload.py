@@ -192,12 +192,42 @@ def api_create_invoice_from_upload(request):
                 except Exception as e:
                     logger.warning(f"Composite name+plate lookup failed: {e}")
 
-            # If not found via name+plate, require phone to create/find by name+phone
-            if not customer_obj:
+            # If not found via name+plate, try finding by name only (as fallback when phone is missing)
+            if not customer_obj and customer_name:
+                try:
+                    customer_obj = CustomerService.find_customer_by_name_only(
+                        branch=user_branch,
+                        full_name=customer_name,
+                    )
+                except Exception as e:
+                    logger.warning(f"Name-only lookup failed: {e}")
+
+            # If found by name (with or without plate), use that customer
+            if customer_obj:
+                # Update contact info if we found existing by name+plate or name-only
+                updated = False
+                try:
+                    if customer_email and (not customer_obj.email or customer_obj.email != customer_email):
+                        customer_obj.email = customer_email
+                        updated = True
+                    if customer_address and (not customer_obj.address or customer_obj.address != customer_address):
+                        customer_obj.address = customer_address
+                        updated = True
+                    if customer_phone and (not customer_obj.phone or customer_obj.phone != customer_phone):
+                        # Only update phone if extracted phone looks valid
+                        if len(customer_phone.strip()) >= 7:
+                            customer_obj.phone = customer_phone
+                            updated = True
+                    if updated:
+                        customer_obj.save(update_fields=['email', 'address', 'phone'] if customer_phone else ['email', 'address'])
+                except Exception:
+                    pass
+            else:
+                # Customer not found - create new one using name + phone
                 if not customer_name or not customer_phone:
                     return JsonResponse({
                         'success': False,
-                        'message': 'Customer name and phone are required'
+                        'message': 'Customer name and phone are required to create new customer'
                     })
                 customer_obj, created = CustomerService.create_or_get_customer(
                     branch=user_branch,
@@ -211,22 +241,8 @@ def api_create_invoice_from_upload(request):
                 if not customer_obj:
                     return JsonResponse({
                         'success': False,
-                        'message': 'Failed to create/get customer'
+                        'message': 'Failed to create customer'
                     })
-            else:
-                # Update basic contact info if we found existing by name+plate
-                updated = False
-                try:
-                    if customer_email and (not customer_obj.email or customer_obj.email != customer_email):
-                        customer_obj.email = customer_email
-                        updated = True
-                    if customer_address and (not customer_obj.address or customer_obj.address != customer_address):
-                        customer_obj.address = customer_address
-                        updated = True
-                    if updated:
-                        customer_obj.save(update_fields=['email', 'address'])
-                except Exception:
-                    pass
 
             # Get or create vehicle if plate provided
             vehicle = None

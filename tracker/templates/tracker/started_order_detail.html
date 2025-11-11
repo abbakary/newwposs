@@ -206,13 +206,6 @@
                             </div>
                           </div>
 
-                          <!-- Line Items -->
-                          <div class="mb-3 pb-3 border-bottom">
-                            <h6 class="text-muted mb-2"><i class="fa fa-list me-2"></i>Line Items</h6>
-                            <div id="previewLineItems" class="small">
-                              <p class="text-muted">-</p>
-                            </div>
-                          </div>
 
                           <!-- Payment Information -->
                           <div class="mb-3 pb-3 border-bottom">
@@ -880,9 +873,26 @@
               if (useExtractedDataBtn){
                 useExtractedDataBtn.addEventListener('click', function(){
                   if (extractedInvoiceData && extractedInvoiceData.header){
-                    populateManualFormWithExtracted(extractedInvoiceData);
-                    // Switch to manual tab
-                    document.getElementById('invoiceManualTab').click();
+                    // Pre-populate extracted data in the extraction form modal
+                    const header = extractedInvoiceData.header;
+                    document.querySelector('input[name="extracted_customer_name"]').value = header.customer_name || '';
+                    document.querySelector('input[name="extracted_phone"]').value = header.phone || '';
+                    document.querySelector('input[name="extracted_email"]').value = header.email || '';
+                    document.querySelector('input[name="extracted_address"]').value = header.address || '';
+                    document.querySelector('textarea[name="extracted_description"]').value = header.remarks || '';
+                    document.querySelector('input[name="extracted_priority"]').value = header.priority || 'medium';
+
+                    // Show the extraction form modal instead of manual form
+                    if (window.extractionFormModal) {
+                      // Close invoice modal
+                      if (modal) modal.hide();
+                      // Open extraction form modal
+                      window.extractionFormModal.open();
+                    } else {
+                      // Fallback to manual form
+                      populateManualFormWithExtracted(extractedInvoiceData);
+                      document.getElementById('invoiceManualTab').click();
+                    }
                   }
                 });
               }
@@ -1313,6 +1323,8 @@
 
 </div>
 
+<!-- Include Extraction Form Modal -->
+{% include 'tracker/modals/extraction_form_modal.html' %}
 
 <!-- Unified Edit Details Modal -->
 <div class="modal fade" id="editDetailsModal" tabindex="-1">
@@ -1543,6 +1555,27 @@ document.addEventListener('DOMContentLoaded', function(){
 });
 
 
+</script>
+
+<!-- Extraction Form Modal JavaScript -->
+<script src="{% static 'js/extraction_form_modal.js' %}"></script>
+
+<script>
+  // Initialize extraction form modal for started orders
+  document.addEventListener('DOMContentLoaded', function() {
+    // Create hidden inputs for extraction modal to access
+    const orderTypeInput = document.createElement('input');
+    orderTypeInput.type = 'hidden';
+    orderTypeInput.name = 'order_type';
+    orderTypeInput.value = '{{ order.type|default:"service" }}';
+    document.body.appendChild(orderTypeInput);
+
+    const orderIdInput = document.createElement('input');
+    orderIdInput.type = 'hidden';
+    orderIdInput.name = 'order_id';
+    orderIdInput.value = '{{ order.id }}';
+    document.body.appendChild(orderIdInput);
+  });
 </script>
 
 {% endblock %}

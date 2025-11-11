@@ -55,6 +55,35 @@ class CustomerService:
             return None
 
     @staticmethod
+    def find_customer_by_name_only(
+        branch: Optional[Branch],
+        full_name: str,
+    ) -> Optional[Customer]:
+        """
+        Find an existing customer by name only within a branch.
+        Used as fallback when plate number is not available during extraction.
+        Returns the first matching Customer if found, otherwise None.
+        """
+        try:
+            if not branch or not full_name:
+                return None
+            name = (full_name or "").strip()
+            if not name:
+                return None
+            from tracker.models import Customer as CustomerModel
+            customer = (
+                CustomerModel.objects.filter(
+                    branch=branch,
+                    full_name__iexact=name,
+                )
+                .first()
+            )
+            return customer
+        except Exception as e:
+            logger.warning(f"Error finding customer by name only: {e}")
+            return None
+
+    @staticmethod
     def find_duplicate_customer(
         branch: Optional[Branch],
         full_name: str,

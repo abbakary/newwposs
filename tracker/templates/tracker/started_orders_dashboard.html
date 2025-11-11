@@ -13,15 +13,20 @@
         <p class="text-muted small mt-1">Manage orders that have been initiated and are awaiting completion</p>
       </div>
       <div class="col-6">
-        <div class="d-flex justify-content-between align-items-start">
+        <div class="d-flex justify-content-between align-items-start gap-2">
           <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{% url 'tracker:dashboard' %}"><i class="fa fa-home"></i></a></li>
             <li class="breadcrumb-item"><a href="{% url 'tracker:orders_list' %}">Orders</a></li>
             <li class="breadcrumb-item active">Started Orders</li>
           </ol>
-          <a href="{% url 'tracker:orders_list' %}?view=started" class="btn btn-primary btn-sm">
-            <i class="fa fa-list me-1"></i>View All Orders
-          </a>
+          <div class="d-flex gap-2">
+            <button class="btn btn-success btn-sm" id="openOrderStartModal" title="Create new order from modal">
+              <i class="fa fa-plus-circle me-1"></i>Create Order
+            </button>
+            <a href="{% url 'tracker:orders_list' %}?view=started" class="btn btn-primary btn-sm">
+              <i class="fa fa-list me-1"></i>View All Orders
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -434,5 +439,23 @@
   letter-spacing: 0.3px;
 }
 </style>
+
+<!-- Include Order Start Modal -->
+{% include 'tracker/modals/order_start_modal.html' %}
+
+<!-- Order Start Modal JavaScript -->
+<script src="{% static 'js/order_start_modal.js' %}"></script>
+
+<script>
+  // Event listener for Create Order button
+  document.addEventListener('DOMContentLoaded', function() {
+    const createOrderBtn = document.getElementById('openOrderStartModal');
+    if (createOrderBtn && window.orderStartModal) {
+      createOrderBtn.addEventListener('click', function() {
+        window.orderStartModal.open();
+      });
+    }
+  });
+</script>
 
 {% endblock %}

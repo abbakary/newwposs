@@ -1,0 +1,572 @@
+<!-- Order Start Modal - Step 1: Order Type & Customer Type Selection -->
+<div class="modal fade" id="orderStartModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <!-- Header -->
+      <div class="modal-header border-bottom border-light bg-gradient-primary text-white">
+        <div>
+          <h5 class="modal-title fw-bold mb-1">
+            <i class="fa fa-plus-circle me-2"></i>Create New Order
+          </h5>
+          <small class="opacity-75">Select order type and customer details</small>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+
+      <!-- Body -->
+      <form id="orderStartForm" method="post" class="modal-body order-start-form">
+        {% csrf_token %}
+        
+        <!-- Step Indicator -->
+        <div class="order-steps-indicator mb-4">
+          <div class="row g-2 text-center">
+            <div class="col">
+              <div class="step-badge active" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">Order Type</div>
+              </div>
+            </div>
+            <div class="col">
+              <div class="step-badge" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">Customer</div>
+              </div>
+            </div>
+            <div class="col">
+              <div class="step-badge" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">Extracted Data</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 1: Order Type Selection -->
+        <div class="form-step" id="step1" data-step="1">
+          <h6 class="fw-bold mb-3">
+            <i class="fa fa-list me-2 text-primary"></i>What type of order?
+          </h6>
+          
+          <div class="row g-3">
+            <!-- Service Order -->
+            <div class="col-md-6">
+              <label class="order-type-card card h-100 cursor-pointer order-type-option" data-type="service">
+                <div class="card-body text-center py-4">
+                  <div class="order-type-icon mb-3">
+                    <i class="fa fa-wrench fa-2x text-primary"></i>
+                  </div>
+                  <h6 class="fw-bold mb-2">Service</h6>
+                  <p class="text-muted small mb-2">Vehicle maintenance and repairs</p>
+                  <div class="eta-info mt-3">
+                    <small class="badge bg-light text-dark">
+                      <i class="fa fa-clock me-1"></i>ETA: Auto-calculated from services
+                    </small>
+                  </div>
+                </div>
+                <input type="radio" name="order_type" value="service" class="d-none">
+              </label>
+            </div>
+
+            <!-- Sales Order -->
+            <div class="col-md-6">
+              <label class="order-type-card card h-100 cursor-pointer order-type-option" data-type="sales">
+                <div class="card-body text-center py-4">
+                  <div class="order-type-icon mb-3">
+                    <i class="fa fa-shopping-cart fa-2x text-success"></i>
+                  </div>
+                  <h6 class="fw-bold mb-2">Sales</h6>
+                  <p class="text-muted small mb-2">Product or item sales</p>
+                  <div class="eta-info mt-3">
+                    <small class="badge bg-light text-dark">
+                      <i class="fa fa-clock me-1"></i>ETA: Based on tire services
+                    </small>
+                  </div>
+                </div>
+                <input type="radio" name="order_type" value="sales" class="d-none">
+              </label>
+            </div>
+
+            <!-- Inquiry -->
+            <div class="col-md-6">
+              <label class="order-type-card card h-100 cursor-pointer order-type-option" data-type="inquiry">
+                <div class="card-body text-center py-4">
+                  <div class="order-type-icon mb-3">
+                    <i class="fa fa-question-circle fa-2x text-info"></i>
+                  </div>
+                  <h6 class="fw-bold mb-2">Inquiry</h6>
+                  <p class="text-muted small mb-2">Customer question or consultation</p>
+                  <div class="eta-info mt-3">
+                    <small class="badge bg-light text-dark">
+                      <i class="fa fa-clock me-1"></i>Auto-completed
+                    </small>
+                  </div>
+                </div>
+                <input type="radio" name="order_type" value="inquiry" class="d-none">
+              </label>
+            </div>
+
+            <!-- Upload from Document -->
+            <div class="col-md-6">
+              <label class="order-type-card card h-100 cursor-pointer order-type-option" data-type="upload">
+                <div class="card-body text-center py-4">
+                  <div class="order-type-icon mb-3">
+                    <i class="fa fa-file-upload fa-2x text-warning"></i>
+                  </div>
+                  <h6 class="fw-bold mb-2">From Document</h6>
+                  <p class="text-muted small mb-2">Extract data from invoice/PDF</p>
+                  <div class="eta-info mt-3">
+                    <small class="badge bg-light text-dark">
+                      <i class="fa fa-magic me-1"></i>Auto-extract
+                    </small>
+                  </div>
+                </div>
+                <input type="radio" name="order_type" value="upload" class="d-none">
+              </label>
+            </div>
+          </div>
+
+          <div id="orderTypeError" class="alert alert-danger mt-3" style="display: none;">
+            <small><i class="fa fa-exclamation-circle me-1"></i><span></span></small>
+          </div>
+        </div>
+
+        <!-- Step 2: Customer Type Selection -->
+        <div class="form-step d-none" id="step2" data-step="2">
+          <h6 class="fw-bold mb-3">
+            <i class="fa fa-user me-2 text-primary"></i>Customer Details
+          </h6>
+          
+          <div class="row g-3 mb-3">
+            <!-- Customer Type -->
+            <div class="col-12">
+              <label class="form-label fw-medium">Customer Type <span class="text-danger">*</span></label>
+              <div class="customer-type-grid">
+                <label class="customer-type-option">
+                  <input type="radio" name="customer_type" value="personal" class="d-none">
+                  <div class="customer-type-card">
+                    <i class="fa fa-user-circle text-primary"></i>
+                    <div>Personal</div>
+                  </div>
+                </label>
+                <label class="customer-type-option">
+                  <input type="radio" name="customer_type" value="company" class="d-none">
+                  <div class="customer-type-card">
+                    <i class="fa fa-building text-success"></i>
+                    <div>Company</div>
+                  </div>
+                </label>
+                <label class="customer-type-option">
+                  <input type="radio" name="customer_type" value="government" class="d-none">
+                  <div class="customer-type-card">
+                    <i class="fa fa-landmark text-warning"></i>
+                    <div>Government</div>
+                  </div>
+                </label>
+                <label class="customer-type-option">
+                  <input type="radio" name="customer_type" value="ngo" class="d-none">
+                  <div class="customer-type-card">
+                    <i class="fa fa-handshake-o text-info"></i>
+                    <div>NGO</div>
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            <!-- Personal Subtype -->
+            <div class="col-12 personal-subtype-section d-none">
+              <label class="form-label fw-medium">Are you? <span class="text-danger">*</span></label>
+              <div class="row g-2">
+                <div class="col-md-6">
+                  <label class="form-check form-check-custom form-check-solid">
+                    <input type="radio" name="personal_subtype" value="owner" class="form-check-input">
+                    <span class="form-check-label">
+                      <i class="fa fa-id-card me-2"></i>Vehicle Owner
+                    </span>
+                  </label>
+                </div>
+                <div class="col-md-6">
+                  <label class="form-check form-check-custom form-check-solid">
+                    <input type="radio" name="personal_subtype" value="driver" class="form-check-input">
+                    <span class="form-check-label">
+                      <i class="fa fa-steering-wheel me-2"></i>Driver
+                    </span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- Organization Details (hidden by default) -->
+            <div class="col-12 org-details-section d-none">
+              <div class="card bg-light border-0">
+                <div class="card-body">
+                  <div class="row g-2">
+                    <div class="col-12">
+                      <label class="form-label fw-medium">Organization Name <span class="text-danger">*</span></label>
+                      <input type="text" name="organization_name" class="form-control" placeholder="Organization/Company name">
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label fw-medium">Tax Number/TIN <span class="text-danger">*</span></label>
+                      <input type="text" name="tax_number" class="form-control" placeholder="Tax ID or TIN">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="customerTypeError" class="alert alert-danger" style="display: none;">
+            <small><i class="fa fa-exclamation-circle me-1"></i><span></span></small>
+          </div>
+        </div>
+
+        <!-- Step 3: Extracted Data Form -->
+        <div class="form-step d-none" id="step3" data-step="3">
+          <h6 class="fw-bold mb-3">
+            <i class="fa fa-file-text me-2 text-primary"></i>Extracted Information
+          </h6>
+          <p class="text-muted small mb-3">Review and edit the extracted data before creating the order</p>
+
+          <div class="extracted-data-form">
+            <!-- Basic Info -->
+            <div class="row g-3 mb-3">
+              <div class="col-12">
+                <label class="form-label fw-medium">Customer Name <span class="text-danger">*</span></label>
+                <input type="text" name="extracted_customer_name" class="form-control" placeholder="Full name">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium">Phone <span class="text-danger">*</span></label>
+                <input type="text" name="extracted_phone" class="form-control" placeholder="Phone number">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium">Email</label>
+                <input type="email" name="extracted_email" class="form-control" placeholder="Email (optional)">
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-medium">Address</label>
+                <textarea name="extracted_address" class="form-control" rows="2" placeholder="Address (optional)"></textarea>
+              </div>
+            </div>
+
+            <!-- Order Details -->
+            <div class="row g-3 mb-3">
+              <div class="col-12">
+                <label class="form-label fw-medium">Order Description</label>
+                <textarea name="extracted_description" class="form-control" rows="3" placeholder="Order details or services needed"></textarea>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium">Estimated Duration (minutes)</label>
+                <input type="number" name="extracted_duration" class="form-control" min="0" placeholder="e.g., 60">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label fw-medium">Priority</label>
+                <select name="extracted_priority" class="form-select">
+                  <option value="">Select priority</option>
+                  <option value="low">Low</option>
+                  <option value="medium" selected>Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Vehicle Details (optional for some order types) -->
+            <div class="vehicle-details-section">
+              <hr class="my-3">
+              <h6 class="fw-semibold mb-3">Vehicle Details (Optional)</h6>
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label fw-medium">Plate Number</label>
+                  <input type="text" name="extracted_plate" class="form-control text-uppercase" placeholder="e.g., T 290">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-medium">Make</label>
+                  <input type="text" name="extracted_make" class="form-control" placeholder="e.g., Toyota">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label fw-medium">Model</label>
+                  <input type="text" name="extracted_model" class="form-control" placeholder="e.g., Camry">
+                </div>
+              </div>
+            </div>
+
+            <div id="extractedDataError" class="alert alert-danger mt-3" style="display: none;">
+              <small><i class="fa fa-exclamation-circle me-1"></i><span></span></small>
+            </div>
+          </div>
+        </div>
+      </form>
+
+      <!-- Footer -->
+      <div class="modal-footer bg-light border-top">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="cancelBtn">
+          <i class="fa fa-times me-1"></i>Cancel
+        </button>
+        
+        <div class="step-nav-buttons">
+          <button type="button" class="btn btn-outline-secondary" id="prevBtn" style="display: none;">
+            <i class="fa fa-arrow-left me-1"></i>Previous
+          </button>
+          <button type="button" class="btn btn-primary" id="nextBtn">
+            <i class="fa fa-arrow-right me-1"></i>Next
+          </button>
+          <button type="button" class="btn btn-success" id="submitBtn" style="display: none;">
+            <i class="fa fa-check me-1"></i>Create Order
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.bg-gradient-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+/* Step Indicator Styles */
+.order-steps-indicator {
+  padding: 20px 0;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.step-badge {
+  position: relative;
+  text-align: center;
+}
+
+.step-badge .step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #e9ecef;
+  color: #6c757d;
+  font-weight: bold;
+  font-size: 16px;
+  margin-bottom: 8px;
+  transition: all 0.3s ease;
+}
+
+.step-badge.active .step-number {
+  background-color: #667eea;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.step-badge.completed .step-number {
+  background-color: #28a745;
+  color: white;
+}
+
+.step-badge .step-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.step-badge.active .step-label {
+  color: #667eea;
+}
+
+.step-badge.completed .step-label {
+  color: #28a745;
+}
+
+/* Order Type Card Styles */
+.order-type-card {
+  border: 2px solid #e9ecef;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.order-type-card:hover {
+  border-color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.15);
+  transform: translateY(-2px);
+}
+
+.order-type-option input[type="radio"]:checked + .order-type-card {
+  border-color: #667eea;
+  background-color: #f8f9ff;
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.25);
+}
+
+.order-type-icon {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background-color: #f0f2f5;
+  font-size: 32px;
+  transition: all 0.3s ease;
+}
+
+.order-type-option input[type="radio"]:checked + .order-type-card .order-type-icon {
+  background-color: rgba(102, 126, 234, 0.1);
+}
+
+.eta-info {
+  display: inline-block;
+}
+
+/* Customer Type Grid */
+.customer-type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.customer-type-option {
+  cursor: pointer;
+  margin: 0;
+}
+
+.customer-type-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 10px;
+  transition: all 0.3s ease;
+  text-align: center;
+  font-weight: 600;
+  font-size: 13px;
+  color: #495057;
+}
+
+.customer-type-card i {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.customer-type-option input[type="radio"]:checked + .customer-type-card {
+  border-color: #667eea;
+  background-color: #f8f9ff;
+  color: #667eea;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+}
+
+.customer-type-option:hover .customer-type-card {
+  border-color: #667eea;
+  transform: translateY(-2px);
+}
+
+/* Form Check Styles */
+.form-check {
+  padding-left: 0;
+}
+
+.form-check-custom {
+  padding-left: 32px;
+}
+
+.form-check-custom .form-check-input {
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-left: -32px;
+  margin-top: 0.25rem;
+  border-radius: 4px;
+  border: 2px solid #dee2e6;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-check-custom .form-check-input:checked {
+  background-color: #667eea;
+  border-color: #667eea;
+}
+
+.form-check-label {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  font-weight: 500;
+  color: #495057;
+}
+
+.form-check-custom .form-check-label:hover {
+  color: #667eea;
+}
+
+/* Form Steps */
+.form-step {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.form-step.d-none {
+  display: none !important;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Extracted Data Form */
+.extracted-data-form {
+  background-color: #f8f9fa;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.personal-subtype-section,
+.org-details-section {
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+  }
+}
+
+/* Cursor Styles */
+.cursor-pointer {
+  cursor: pointer;
+}
+
+/* Step Navigation */
+.step-nav-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+/* Responsive */
+@media (max-width: 576px) {
+  .customer-type-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .modal-dialog {
+    margin: 10px;
+  }
+
+  .order-type-card .card-body {
+    padding: 20px 15px;
+  }
+}
+</style>
