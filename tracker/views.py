@@ -2846,10 +2846,13 @@ def orders_list(request: HttpRequest):
 def order_edit(request: HttpRequest, pk: int):
     """Edit an existing order"""
     order = get_object_or_404(Order, pk=pk)
-    
+
     if request.method == 'POST':
         form = OrderForm(request.POST, instance=order)
         if form.is_valid():
+            # Track if services are being added for the first time
+            had_no_services_before = not order.estimated_duration or order.estimated_duration == 0
+
             # Handle service selections for service orders
             if order.type == 'service':
                 service_selection = request.POST.getlist('service_selection')
@@ -2858,11 +2861,16 @@ def order_edit(request: HttpRequest, pk: int):
                     desc = order.description or ""
                     desc_services = "Selected services: " + ", ".join(service_selection)
                     if desc:
-                        desc = desc + "\n" + desc_services
+                        # Remove old service description if exists
+                        lines = [l for l in desc.split('\n') if not l.strip().lower().startswith('selected services:')]
+                        if lines:
+                            desc = '\n'.join(lines) + "\n" + desc_services
+                        else:
+                            desc = desc_services
                     else:
                         desc = desc_services
                     form.instance.description = desc
-                    
+
                     # Update estimated duration based on selected services
                     try:
                         from .models import ServiceType
@@ -2871,7 +2879,7 @@ def order_edit(request: HttpRequest, pk: int):
                         form.instance.estimated_duration = total_minutes or 50
                     except Exception:
                         pass
-                        
+
             # Handle tire services for sales orders
             elif order.type == 'sales':
                 tire_services = request.POST.getlist('tire_services')
@@ -2880,31 +2888,40 @@ def order_edit(request: HttpRequest, pk: int):
                     desc = order.description or ""
                     desc_services = "Tire services: " + ", ".join(tire_services)
                     if desc:
-                        desc = desc + "\n" + desc_services
+                        # Remove old tire services description if exists
+                        lines = [l for l in desc.split('\n') if not l.strip().lower().startswith('tire services:')]
+                        if lines:
+                            desc = '\n'.join(lines) + "\n" + desc_services
+                        else:
+                            desc = desc_services
                     else:
                         desc = desc_services
                     form.instance.description = desc
-                    
+
                     # Update estimated duration based on selected tire services
                     try:
                         from .models import ServiceAddon
                         addons = ServiceAddon.objects.filter(name__in=tire_services, is_active=True)
                         total_minutes = sum(int(a.estimated_minutes or 0) for a in addons)
-                        # Add to existing estimated duration if it exists
-                        current_duration = order.estimated_duration or 0
-                        form.instance.estimated_duration = current_duration + total_minutes
+                        # Set estimated duration (don't add to existing as we're replacing)
+                        form.instance.estimated_duration = total_minutes or 50
                     except Exception:
                         pass
-            
+
+            # Ensure started_at is set when order is being progressed from 'created' status
+            # This handles the case where an order was created from an invoice and services are now being added
+            if form.instance.status != 'created' and not form.instance.started_at:
+                form.instance.started_at = timezone.now()
+
             order = form.save()
             messages.success(request, 'Order updated successfully.')
             return redirect('tracker:order_detail', pk=order.pk)
     else:
         form = OrderForm(instance=order)
-    
+
     # Set the vehicle queryset to only include vehicles for this customer
     form.fields['vehicle'].queryset = order.customer.vehicles.all()
-    
+
     return render(request, 'tracker/order_form.html', {
         'form': form,
         'order': order,
