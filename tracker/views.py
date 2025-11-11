@@ -318,60 +318,66 @@ def dashboard(request: HttpRequest):
         # Count of out of stock items
         out_of_stock_count = InventoryItem.objects.filter(quantity=0).count()
         
-        # Revenue aggregation from Invoices and Payments
+        # Revenue aggregation from Invoices (Net Value = subtotal, excludes VAT)
         from decimal import Decimal
         from django.db.models import Sum
         from tracker.models import Invoice, InvoicePayment
 
-        total_revenue = Decimal('0')  # Cash received (payments)
-        revenue_this_month = Decimal('0')  # Payments this month
-        total_vat = Decimal('0')
-        vat_this_month = Decimal('0')
-        total_gross = Decimal('0')
-        gross_this_month = Decimal('0')
-        total_invoiced = Decimal('0')  # Accrual: invoices issued
-        invoiced_this_month = Decimal('0')
-        revenue_by_branch = {}
-        revenue_by_branch_tsh = {}
+        total_revenue = Decimal('0')  # Net revenue (subtotal from all invoices)
+        revenue_this_month = Decimal('0')  # Net revenue this month
+        total_vat = Decimal('0')  # Total VAT from all invoices
+        vat_this_month = Decimal('0')  # VAT this month
+        total_gross = Decimal('0')  # Gross value (total_amount = subtotal + VAT)
+        gross_this_month = Decimal('0')  # Gross this month
+        total_invoiced = Decimal('0')  # Accrual: invoices issued (total_amount)
+        invoiced_this_month = Decimal('0')  # Invoiced this month (total_amount)
+        revenue_by_branch = {}  # Revenue by branch (Net Value)
+        revenue_by_branch_tsh = {}  # TSHS-specific view
         try:
             # Scope invoices to user's branch/permissions
             invoices_qs = scope_queryset(Invoice.objects.all(), request.user, request)
 
-            # Total invoiced (sum of invoice amounts regardless of payment status)
-            inv_sums = invoices_qs.aggregate(total_invoiced=Sum('total_amount'), total_vat=Sum('tax_amount'))
-            if inv_sums.get('total_invoiced'):
-                total_invoiced = Decimal(inv_sums.get('total_invoiced'))
+            # Net revenue (subtotal excluding VAT) - this is the primary revenue metric
+            # and is now calculated from extracted invoices as well as manually created ones
+            inv_sums = invoices_qs.aggregate(
+                total_net=Sum('subtotal'),
+                total_vat=Sum('tax_amount'),
+                total_gross=Sum('total_amount')
+            )
+            if inv_sums.get('total_net'):
+                total_revenue = Decimal(str(inv_sums.get('total_net')))
             if inv_sums.get('total_vat'):
-                total_vat = Decimal(inv_sums.get('total_vat'))
+                total_vat = Decimal(str(inv_sums.get('total_vat')))
+            if inv_sums.get('total_gross'):
+                total_gross = Decimal(str(inv_sums.get('total_gross')))
 
-            # Payments (cash) - sum of payment amounts for invoices in scope
-            payments_qs = InvoicePayment.objects.filter(invoice__in=invoices_qs)
-            pay_sums = payments_qs.aggregate(total_paid=Sum('amount'))
-            if pay_sums.get('total_paid'):
-                total_revenue = Decimal(pay_sums.get('total_paid'))
+            # For backward compatibility, keep total_invoiced as total_amount
+            total_invoiced = total_gross
 
             # Month ranges
             month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
 
-            inv_month_sums = invoices_qs.filter(invoice_date__gte=month_start).aggregate(month_invoiced=Sum('total_amount'), month_vat=Sum('tax_amount'))
-            if inv_month_sums.get('month_invoiced'):
-                invoiced_this_month = Decimal(inv_month_sums.get('month_invoiced'))
+            # Monthly revenue (Net = subtotal)
+            inv_month_sums = invoices_qs.filter(invoice_date__gte=month_start).aggregate(
+                month_net=Sum('subtotal'),
+                month_vat=Sum('tax_amount'),
+                month_gross=Sum('total_amount')
+            )
+            if inv_month_sums.get('month_net'):
+                revenue_this_month = Decimal(str(inv_month_sums.get('month_net')))
             if inv_month_sums.get('month_vat'):
-                vat_this_month = Decimal(inv_month_sums.get('month_vat'))
+                vat_this_month = Decimal(str(inv_month_sums.get('month_vat')))
+            if inv_month_sums.get('month_gross'):
+                gross_this_month = Decimal(str(inv_month_sums.get('month_gross')))
 
-            pay_month_sums = payments_qs.filter(payment_date__gte=month_start).aggregate(month_paid=Sum('amount'))
-            if pay_month_sums.get('month_paid'):
-                revenue_this_month = Decimal(pay_month_sums.get('month_paid'))
+            # For backward compatibility
+            invoiced_this_month = gross_this_month
 
-            # Gross values: if invoices store gross separately use that, otherwise approximate as total_amount
-            total_gross = total_invoiced
-            gross_this_month = invoiced_this_month
-
-            # Revenue by branch (group invoices total_amount by branch name)
-            rows = invoices_qs.values_list('total_amount', 'branch__name')
-            for total_amt, branch_name in rows:
+            # Revenue by branch (Net Value = subtotal, excluding VAT)
+            rows = invoices_qs.values_list('subtotal', 'branch__name')
+            for subtotal_amt, branch_name in rows:
                 try:
-                    amount = Decimal(total_amt) if total_amt is not None else Decimal('0')
+                    amount = Decimal(str(subtotal_amt)) if subtotal_amt is not None else Decimal('0')
                 except Exception:
                     continue
                 b = branch_name or 'Unassigned'
@@ -379,12 +385,12 @@ def dashboard(request: HttpRequest):
                     revenue_by_branch[b] = Decimal('0')
                 revenue_by_branch[b] += amount
 
-            # Build TSHS-specific view using branch totals
+            # Build TSHS-specific view using branch totals (Net)
             for b, amt in revenue_by_branch.items():
                 revenue_by_branch_tsh[b] = amt
 
         except Exception as e:
-            logger.error(f"Error aggregating revenue from invoices/payments: {e}")
+            logger.error(f"Error aggregating revenue from invoices: {e}")
             total_revenue = Decimal('0')
             revenue_this_month = Decimal('0')
             total_vat = Decimal('0')
