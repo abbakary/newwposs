@@ -755,6 +755,17 @@ def invoice_create(request, order_id=None):
                 initial['reference'] = vehicle.plate_number
             else:
                 initial['reference'] = order.order_number
+
+        # Pre-populate customer if available
+        if customer:
+            initial['existing_customer'] = customer.id
+            initial['customer_name'] = customer.full_name
+            initial['customer_phone'] = customer.phone
+            if customer.email:
+                initial['customer_email'] = customer.email
+            if customer.address:
+                initial['customer_address'] = customer.address
+
         try:
             form = InvoiceForm(user=request.user, initial=initial)
         except TypeError:
