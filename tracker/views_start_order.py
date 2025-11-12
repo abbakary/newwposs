@@ -874,51 +874,97 @@ def api_record_overrun_reason(request, order_id):
 
 @login_required
 def overrun_reports(request: HttpRequest):
-    """Page showing reported order overruns and KPIs to help staff analyze delays."""
-    from django.db.models import Count, Avg, F
+    """Page showing all orders that exceed ETA, with or without reported reasons."""
+    from django.db.models import Count, Avg, F, Q
+    from django.utils import timezone
 
     user_branch = get_user_branch(request.user)
     qs = Order.objects.all()
     if user_branch:
         qs = qs.filter(branch=user_branch)
 
-    overruns = qs.filter(overrun_reason__isnull=False).order_by('-overrun_reported_at')
-    total_overruns = overruns.count()
+    # Find ALL orders that exceeded their estimated duration
+    # Calculate which orders have exceeded by comparing:
+    # - For completed/cancelled orders: actual_duration vs estimated_duration
+    # - For in_progress/created orders: elapsed time vs estimated_duration
+    all_exceeded = []
 
-    # Average delay minutes: compute from estimated_duration and actual_duration where available
-    delays = overruns.annotate(delay_minutes=(F('actual_duration') - F('estimated_duration'))).filter(delay_minutes__isnull=False)
-    avg_delay = delays.aggregate(avg=Avg('delay_minutes'))['avg'] if delays.exists() else 0
-
-    completed_late = overruns.filter(status='completed').count()
-
-    # Top reasons
-    top_reasons = overruns.values('overrun_reason').annotate(count=Count('id')).order_by('-count')[:10]
-
-    # Recent overruns with computed delay minutes fallback
-    recent = []
-    for o in overruns[:50]:
+    for order in qs.filter(estimated_duration__isnull=False, type__in=['service', 'sales']).order_by('-created_at'):
         try:
-            delay = None
-            if o.actual_duration and o.estimated_duration:
-                delay = max(0, int(o.actual_duration) - int(o.estimated_duration))
-        except Exception:
-            delay = None
-        recent.append({
-            'id': o.id,
-            'order_number': o.order_number,
-            'overrun_reason': o.overrun_reason,
-            'overrun_reported_by': o.overrun_reported_by,
-            'overrun_reported_at': o.overrun_reported_at,
-            'delay_minutes': delay,
-        })
+            estimated = int(order.estimated_duration) if order.estimated_duration else 0
+            if estimated <= 0:
+                continue
+
+            # Calculate actual elapsed time based on status
+            if order.status in ['completed', 'cancelled']:
+                if order.actual_duration:
+                    elapsed = int(order.actual_duration)
+                else:
+                    # Fallback: calculate from dates
+                    start = order.started_at or order.created_at
+                    end = order.completed_at or order.cancelled_at
+                    if start and end:
+                        elapsed = int((end - start).total_seconds() // 60)
+                    else:
+                        elapsed = None
+            else:
+                # For ongoing orders: calculate from start/create to now
+                start = order.started_at or order.created_at
+                if start:
+                    elapsed = int((timezone.now() - start).total_seconds() // 60)
+                else:
+                    elapsed = None
+
+            if elapsed and elapsed > estimated:
+                delay_minutes = elapsed - estimated
+                all_exceeded.append({
+                    'id': order.id,
+                    'order_number': order.order_number,
+                    'customer': order.customer.full_name if order.customer else 'Unknown',
+                    'status': order.status,
+                    'estimated_duration': estimated,
+                    'elapsed_minutes': elapsed,
+                    'delay_minutes': delay_minutes,
+                    'overrun_reason': order.overrun_reason,
+                    'overrun_reported_by': order.overrun_reported_by,
+                    'overrun_reported_at': order.overrun_reported_at,
+                    'created_at': order.created_at,
+                    'started_at': order.started_at,
+                    'completed_at': order.completed_at,
+                    'has_reason': bool(order.overrun_reason),
+                    'vehicle': order.vehicle.plate_number if order.vehicle else None,
+                })
+        except Exception as e:
+            logger.warning(f"Error calculating overrun for order {order.id}: {e}")
+            continue
+
+    # Sort by delay_minutes descending
+    all_exceeded.sort(key=lambda x: x['delay_minutes'], reverse=True)
+
+    # Calculate statistics
+    total_exceeded = len(all_exceeded)
+    with_reasons = sum(1 for o in all_exceeded if o['has_reason'])
+    without_reasons = total_exceeded - with_reasons
+
+    avg_delay = sum(o['delay_minutes'] for o in all_exceeded) / total_exceeded if total_exceeded > 0 else 0
+    completed_late = sum(1 for o in all_exceeded if o['status'] == 'completed')
+
+    # Top delay reasons (only from those with reasons)
+    reasons_dict = {}
+    for o in all_exceeded:
+        if o['has_reason']:
+            reason = o['overrun_reason'] or '(blank)'
+            reasons_dict[reason] = reasons_dict.get(reason, 0) + 1
+    top_reasons = sorted(reasons_dict.items(), key=lambda x: x[1], reverse=True)[:10]
 
     context = {
-        'total_overruns': total_overruns,
+        'total_exceeded': total_exceeded,
+        'with_reasons': with_reasons,
+        'without_reasons': without_reasons,
         'avg_delay': avg_delay or 0,
         'completed_late': completed_late,
-        'unique_reasons': top_reasons.count() if hasattr(top_reasons, 'count') else len(top_reasons),
+        'exceeded_orders': all_exceeded[:100],  # Paginate to 100
         'top_reasons': top_reasons,
-        'recent_overruns': recent,
     }
 
     return render(request, 'tracker/overrun_reports.html', context)
