@@ -239,13 +239,29 @@ def api_create_invoice_from_upload(request):
             # Get existing started order if provided
             selected_order_id = request.POST.get('selected_order_id')
             order = None
+            original_order_customer_id = None
+
             if selected_order_id:
                 try:
                     order = Order.objects.get(id=int(selected_order_id), branch=user_branch)
+                    original_order_customer_id = order.customer_id
                     logger.info(f"Found existing order {order.id} to update")
                 except Exception as e:
                     logger.warning(f"Could not find existing order {selected_order_id}: {e}")
                     pass
+
+            # Check if the extracted customer is different from the order's original customer
+            # If so, redirect to the extracted customer's detail page instead of updating the order
+            if order and original_order_customer_id and original_order_customer_id != customer_obj.id:
+                # Customer from extraction is different from original order customer
+                # Redirect to the extracted customer's detail page so user can create/link proper orders
+                logger.info(f"Invoice extraction found different customer {customer_obj.id} than order's original customer {original_order_customer_id}")
+                return JsonResponse({
+                    'success': True,
+                    'message': f'Invoice is for customer "{customer_obj.full_name}". Redirecting to their profile to create/link orders.',
+                    'customer_id': customer_obj.id,
+                    'redirect_url': reverse('tracker:customer_detail', kwargs={'pk': customer_obj.id}) + '?flash=invoice_upload_customer_found'
+                })
 
             # If no existing order, create new one
             if not order:
