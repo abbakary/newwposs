@@ -344,11 +344,11 @@ def dashboard(request: HttpRequest):
                 total_vat=Sum('tax_amount'),
                 total_gross=Sum('total_amount')
             )
-            if inv_sums.get('total_net'):
+            if inv_sums.get('total_net') is not None:
                 total_revenue = Decimal(str(inv_sums.get('total_net')))
-            if inv_sums.get('total_vat'):
+            if inv_sums.get('total_vat') is not None:
                 total_vat = Decimal(str(inv_sums.get('total_vat')))
-            if inv_sums.get('total_gross'):
+            if inv_sums.get('total_gross') is not None:
                 total_gross = Decimal(str(inv_sums.get('total_gross')))
 
             # For backward compatibility, keep total_invoiced as total_amount
