@@ -94,8 +94,9 @@ class CustomerService:
     ) -> Optional[Customer]:
         """
         Find existing customer matching the given criteria.
-        Uses database unique constraint: (branch, full_name, phone, organization_name, tax_number)
-        Normalizes phone numbers for comparison.
+        Primary match: branch + full_name + phone (normalized)
+        Secondary match: organization_name and tax_number (only if provided AND stored)
+        This allows for matching even when extracted data is incomplete.
         Returns the matching customer if found, None otherwise.
         """
         if not branch or not full_name or not phone:
@@ -115,16 +116,37 @@ class CustomerService:
             for candidate in candidates:
                 candidate_phone = normalize_phone(candidate.phone or '')
 
-                # Match phone (normalized), organization_name, and tax_number
-                org_match = (organization_name or '') == (candidate.organization_name or '')
-                tax_match = (tax_number or '') == (candidate.tax_number or '')
+                # Primary match: phone (required, normalized)
                 phone_match = normalized_phone == candidate_phone
+                if not phone_match:
+                    continue
 
-                if phone_match and org_match and tax_match:
-                    # If customer_type is specified, it must also match
-                    if customer_type and candidate.customer_type != customer_type:
+                # Secondary match: organization_name and tax_number
+                # Only require exact match if BOTH provided in the query
+                # If either is missing in the query, don't require them to match
+                if organization_name and tax_number:
+                    org_match = organization_name == (candidate.organization_name or '')
+                    tax_match = tax_number == (candidate.tax_number or '')
+                    if not (org_match and tax_match):
                         continue
-                    return candidate
+                elif organization_name:
+                    # Only organization_name provided - must match
+                    org_match = organization_name == (candidate.organization_name or '')
+                    if not org_match:
+                        continue
+                elif tax_number:
+                    # Only tax_number provided - must match
+                    tax_match = tax_number == (candidate.tax_number or '')
+                    if not tax_match:
+                        continue
+                # If neither organization_name nor tax_number provided, don't filter on them
+
+                # If customer_type is specified, it must also match (optional)
+                if customer_type and candidate.customer_type != customer_type:
+                    continue
+
+                # Found a match!
+                return candidate
 
             return None
         except Exception as e:
