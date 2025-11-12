@@ -1797,7 +1797,7 @@ def start_order(request: HttpRequest):
 
 
 @login_required
-def create_order_for_customer(request: HttpRequest, pk: int):
+def create_order_for_customer(request: HttpRequest, pk: int, *args, **kwargs):
     """Create a new order for a specific customer"""
     from .utils import adjust_inventory
     customers_qs = scope_queryset(Customer.objects.all(), request.user, request)
