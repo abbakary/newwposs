@@ -1130,17 +1130,17 @@ def customer_register(request: HttpRequest):
                     )
 
                     if can_access:
-                        # Same branch: redirect to existing customer
-                        dup_url = reverse("tracker:customer_detail", kwargs={'pk': existing_customer.id}) + "?flash=existing_customer"
+                        # Same branch: redirect to existing customer (regardless of action)
+                        dup_url = reverse("tracker:customer_detail", kwargs={'pk': existing_customer.id}) + "?flash=existing_customer&from_registration=1"
                         if is_ajax:
                             return json_response(
                                 False,
                                 form=form,
-                                message=f"Customer '{full_name}' already exists. Redirected to their profile.",
+                                message=f"Customer '{full_name}' already exists. You can create an order from their profile.",
                                 message_type='info',
                                 redirect_url=dup_url
                             )
-                        messages.info(request, f"Customer '{full_name}' already exists. Redirected to their profile.")
+                        messages.info(request, f"Customer '{full_name}' already exists. You can create an order from their profile.")
                         return redirect(dup_url)
                     else:
                         # Different branch: allow creation but warn
@@ -1149,7 +1149,7 @@ def customer_register(request: HttpRequest):
                         else:
                             messages.warning(request, f"A customer with the same details exists in another branch. A separate customer will be created in your branch.")
 
-                # If action is to save the customer immediately
+                # If action is to save the customer immediately (this is redundant now since we redirect above if exists)
                 if action == "save_customer" or save_only:
                     try:
                         c, created = CustomerService.create_or_get_customer(
