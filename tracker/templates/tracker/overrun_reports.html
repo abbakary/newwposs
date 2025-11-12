@@ -4,81 +4,239 @@
 <div class="container-fluid">
   <div class="page-title mb-3">
     <div class="row">
-      <div class="col-6"><h4>Order Overrun Reports</h4></div>
+      <div class="col-6"><h4>Order Overrun Analysis</h4></div>
       <div class="col-6 text-end"><a href="{% url 'tracker:orders_list' %}" class="btn btn-sm btn-outline-secondary">Back to Orders</a></div>
     </div>
   </div>
 
+  <!-- Key Metrics -->
   <div class="row g-3 mb-4">
     <div class="col-md-3">
-      <div class="card shadow-sm text-center p-3">
-        <div class="small text-muted">Total Overruns</div>
-        <h3>{{ total_overruns|default:0 }}</h3>
+      <div class="card shadow-sm text-center p-3 border-primary">
+        <div class="small text-muted">Orders Exceeding ETA</div>
+        <h3 class="text-primary">{{ total_exceeded|default:0 }}</h3>
+        <small class="text-muted">service & sales only</small>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm text-center p-3 border-success">
+        <div class="small text-muted">With Reason Provided</div>
+        <h3 class="text-success">{{ with_reasons|default:0 }}</h3>
+        <small class="text-muted">{{ with_reasons|default:0 }} of {{ total_exceeded|default:0 }}</small>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card shadow-sm text-center p-3 border-warning">
+        <div class="small text-muted">Without Reason</div>
+        <h3 class="text-warning">{{ without_reasons|default:0 }}</h3>
+        <small class="text-muted">still needs documentation</small>
       </div>
     </div>
     <div class="col-md-3">
       <div class="card shadow-sm text-center p-3">
-        <div class="small text-muted">Avg Delay (mins)</div>
-        <h3>{{ avg_delay|default:0|floatformat:1 }}</h3>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card shadow-sm text-center p-3">
-        <div class="small text-muted">Orders Completed Late</div>
-        <h3>{{ completed_late|default:0 }}</h3>
-      </div>
-    </div>
-    <div class="col-md-3">
-      <div class="card shadow-sm text-center p-3">
-        <div class="small text-muted">Unique Reasons</div>
-        <h3>{{ unique_reasons|default:0 }}</h3>
+        <div class="small text-muted">Avg Delay</div>
+        <h3>{{ avg_delay|floatformat:0 }} <small>mins</small></h3>
+        <small class="text-muted">across all overruns</small>
       </div>
     </div>
   </div>
 
-  <div class="row">
-    <div class="col-lg-6">
+  <div class="row g-3">
+    <!-- Left: Top Delay Reasons -->
+    <div class="col-lg-4">
       <div class="card shadow-sm">
-        <div class="card-header bg-light"><strong>Top Delay Reasons</strong></div>
+        <div class="card-header bg-light">
+          <h6 class="mb-0"><i class="fa fa-list-ol me-2"></i>Top Delay Reasons</h6>
+        </div>
         <div class="card-body">
-          <ul class="list-group">
-            {% for r in top_reasons %}
+          {% if top_reasons %}
+          <ul class="list-group list-group-flush">
+            {% for reason, count in top_reasons %}
             <li class="list-group-item d-flex justify-content-between align-items-center">
-              <div>{{ r.reason|default:'(blank)' }}</div>
-              <span class="badge bg-primary rounded-pill">{{ r.count }}</span>
+              <div style="flex: 1; padding-right: 10px;">
+                <small>{{ reason|truncatewords:5 }}</small>
+              </div>
+              <span class="badge bg-primary rounded-pill">{{ count }}</span>
             </li>
-            {% empty %}
-            <li class="list-group-item">No reported overruns yet.</li>
             {% endfor %}
           </ul>
+          {% else %}
+          <div class="text-muted text-center py-4">
+            <i class="fa fa-info-circle me-2"></i>
+            <small>No reasons documented yet</small>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
-    <div class="col-lg-6">
+
+    <!-- Right: All Exceeded Orders -->
+    <div class="col-lg-8">
       <div class="card shadow-sm">
-        <div class="card-header bg-light"><strong>Recent Overrun Reports</strong></div>
-        <div class="card-body">
+        <div class="card-header bg-light">
+          <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0"><i class="fa fa-exclamation-triangle me-2 text-warning"></i>All Orders Exceeding ETA</h6>
+            <small class="text-muted">Showing {{ exceeded_orders|length }} of {{ total_exceeded }}</small>
+          </div>
+        </div>
+        <div class="card-body p-0">
+          {% if exceeded_orders %}
           <div class="table-responsive">
-            <table class="table table-sm">
-              <thead><tr><th>Order</th><th>Reason</th><th>Reported By</th><th>Reported At</th><th>Delay (mins)</th></tr></thead>
-              <tbody>
-                {% for o in recent_overruns %}
+            <table class="table table-hover mb-0">
+              <thead class="table-light">
                 <tr>
-                  <td><a href="{% url 'tracker:order_detail' pk=o.id %}">{{ o.order_number }}</a></td>
-                  <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ o.overrun_reason }}</td>
-                  <td>{% if o.overrun_reported_by %}{{ o.overrun_reported_by.get_full_name }}{% else %}System{% endif %}</td>
-                  <td>{{ o.overrun_reported_at|date:'M d, Y H:i' }}</td>
-                  <td>{{ o.delay_minutes }}</td>
+                  <th style="width: 12%;">Order</th>
+                  <th style="width: 15%;">Customer</th>
+                  <th style="width: 10%;">Vehicle</th>
+                  <th style="width: 12%;">Status</th>
+                  <th style="width: 12%;">ETA / Actual</th>
+                  <th style="width: 10%;">Delay</th>
+                  <th style="width: 29%;">Delay Reason</th>
                 </tr>
-                {% empty %}
-                <tr><td colspan="5">No overruns reported</td></tr>
+              </thead>
+              <tbody>
+                {% for order in exceeded_orders %}
+                <tr class="{% if not order.has_reason %}table-warning{% endif %}">
+                  <td>
+                    <a href="{% url 'tracker:order_detail' pk=order.id %}" class="text-decoration-none">
+                      <strong>{{ order.order_number }}</strong>
+                    </a>
+                  </td>
+                  <td>
+                    <small>{{ order.customer|truncatewords:2 }}</small>
+                  </td>
+                  <td>
+                    <small class="text-muted">{{ order.vehicle|default:"-" }}</small>
+                  </td>
+                  <td>
+                    <span class="badge {% if order.status == 'completed' %}bg-success{% elif order.status == 'cancelled' %}bg-secondary{% elif order.status == 'in_progress' %}bg-warning text-dark{% else %}bg-light text-dark{% endif %}">
+                      {{ order.status|title }}
+                    </span>
+                  </td>
+                  <td>
+                    <small>
+                      <strong>{{ order.estimated_duration }}m</strong> / {{ order.elapsed_minutes }}m
+                    </small>
+                  </td>
+                  <td>
+                    <span class="badge bg-danger">+{{ order.delay_minutes }}m</span>
+                  </td>
+                  <td>
+                    {% if order.has_reason %}
+                    <small class="text-truncate d-inline-block" style="max-width: 200px;" title="{{ order.overrun_reason }}">
+                      {{ order.overrun_reason|truncatewords:5 }}
+                      <br>
+                      <span class="text-muted" style="font-size: 0.75rem;">by {{ order.overrun_reported_by.get_full_name|default:"System" }} on {{ order.overrun_reported_at|date:"M d H:i" }}</span>
+                    </small>
+                    {% else %}
+                    <small class="badge bg-warning text-dark">
+                      <i class="fa fa-exclamation me-1"></i>No reason provided
+                    </small>
+                    {% endif %}
+                  </td>
+                </tr>
                 {% endfor %}
               </tbody>
             </table>
+          </div>
+          {% else %}
+          <div class="text-center py-5 text-muted">
+            <i class="fa fa-check-circle fa-3x mb-3 text-success"></i>
+            <p class="mb-0">No orders exceeding their estimated time!</p>
+            <small>Great job staying on schedule.</small>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filter & Export Options -->
+  <div class="row g-3 mt-2">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-light">
+          <h6 class="mb-0"><i class="fa fa-filter me-2"></i>Quick Filters</h6>
+        </div>
+        <div class="card-body">
+          <div class="btn-group" role="group">
+            <a href="?filter=with_reasons" class="btn btn-outline-success btn-sm">
+              <i class="fa fa-check me-1"></i>With Reasons ({{ with_reasons }})
+            </a>
+            <a href="?filter=without_reasons" class="btn btn-outline-warning btn-sm">
+              <i class="fa fa-exclamation me-1"></i>Without Reasons ({{ without_reasons }})
+            </a>
+            <a href="?filter=completed" class="btn btn-outline-info btn-sm">
+              <i class="fa fa-check-circle me-1"></i>Completed Late ({{ completed_late }})
+            </a>
+            <a href="" class="btn btn-outline-secondary btn-sm">
+              <i class="fa fa-refresh me-1"></i>Reset
+            </a>
           </div>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Legend -->
+  <div class="row g-3 mt-2">
+    <div class="col-12">
+      <div class="card shadow-sm border-light">
+        <div class="card-body">
+          <small class="text-muted">
+            <i class="fa fa-info-circle me-2"></i>
+            <strong>Legend:</strong>
+            Rows highlighted in <span class="badge bg-warning text-dark">yellow</span> indicate orders exceeding ETA without a documented reason. 
+            Click on an order number to view details and add a reason if needed.
+          </small>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
+
+<style>
+.card {
+  border: none;
+  border-radius: 8px;
+}
+
+.card.border-primary {
+  border: 1px solid #0d6efd !important;
+}
+
+.card.border-success {
+  border: 1px solid #198754 !important;
+}
+
+.card.border-warning {
+  border: 1px solid #ffc107 !important;
+}
+
+.table-responsive {
+  border-radius: 0;
+}
+
+table tr:hover {
+  background-color: #f8f9fa;
+}
+
+table tr.table-warning:hover {
+  background-color: #fff3cd !important;
+}
+
+.badge {
+  font-weight: 500;
+}
+
+@media (max-width: 992px) {
+  .table {
+    font-size: 0.85rem;
+  }
+
+  th, td {
+    padding: 0.5rem !important;
+  }
+}
+</style>
 {% endblock %}
