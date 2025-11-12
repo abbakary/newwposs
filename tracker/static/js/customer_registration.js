@@ -100,6 +100,12 @@
             var saveOnly = document.getElementById('saveOnly'); if(saveOnly) saveOnly.value='0';
             ajaxPostForm(form, function(data){
               try{
+                // Check if customer already exists and redirect_url is provided
+                if(data && data.redirect_url && !data.success){
+                  // Customer exists - show modal with options instead of immediate redirect
+                  showExistingCustomerModal(data.redirect_url, data.message || 'Customer already exists');
+                  return;
+                }
                 // If server returned form_html with errors, render it
                 if(data && data.form_html && (!data.success)){
                   document.getElementById('registrationWizard').innerHTML = data.form_html; bindWizard();
