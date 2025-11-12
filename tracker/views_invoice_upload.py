@@ -231,19 +231,22 @@ def api_create_invoice_from_upload(request):
             if plate:
                 try:
                     vehicle = VehicleService.create_or_get_vehicle(customer=customer_obj, plate_number=plate)
+                    logger.info(f"Vehicle linked to customer {customer_obj.id}: {plate}")
                 except Exception as e:
-                    logger.warning(f"Failed to create/get vehicle: {e}")
+                    logger.warning(f"Failed to create/get vehicle for customer {customer_obj.id}: {e}")
                     vehicle = None
-            
+
             # Get existing started order if provided
             selected_order_id = request.POST.get('selected_order_id')
             order = None
             if selected_order_id:
                 try:
                     order = Order.objects.get(id=int(selected_order_id), branch=user_branch)
-                except Exception:
+                    logger.info(f"Found existing order {order.id} to update")
+                except Exception as e:
+                    logger.warning(f"Could not find existing order {selected_order_id}: {e}")
                     pass
-            
+
             # If no existing order, create new one
             if not order:
                 try:
@@ -254,17 +257,22 @@ def api_create_invoice_from_upload(request):
                         vehicle=vehicle,
                         description='Created from invoice upload'
                     )
+                    logger.info(f"Created new order {order.id} for customer {customer_obj.id}")
                 except Exception as e:
-                    logger.warning(f"Failed to create order: {e}")
+                    logger.error(f"Failed to create order for customer {customer_obj.id}: {e}")
                     return JsonResponse({
                         'success': False,
                         'message': f'Failed to create order: {str(e)}'
                     })
             else:
-                # Update existing started order
-                order.customer = customer_obj
-                order.vehicle = vehicle or order.vehicle
-                order.save()
+                # Update existing started order to ensure it's linked to the correct customer
+                if order.customer_id != customer_obj.id:
+                    order.customer = customer_obj
+                    logger.info(f"Updated order {order.id} customer from {order.customer_id} to {customer_obj.id}")
+                if vehicle and order.vehicle_id != vehicle.id:
+                    order.vehicle = vehicle
+                    logger.info(f"Updated order {order.id} vehicle to {vehicle.id}")
+                order.save(update_fields=['customer', 'vehicle'] if vehicle else ['customer'])
             
             # Create or reuse invoice (enforce one invoice per order)
             inv = None
