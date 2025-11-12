@@ -206,14 +206,20 @@ def api_upload_extract_invoice(request):
                 logger.warning(f"Failed to create/get customer from extracted data: {e}")
                 customer_obj = None
         elif not customer_obj and cust_name:
-            # Only name available, try to find matching customer
+            # Only name available - use deterministic phone for deduplication
+            # This ensures same customer name always maps to same customer record
             try:
-                customer_obj = Customer.objects.filter(
+                deterministic_phone = f"INVOICE_{cust_name.upper()[:50].replace(' ', '_')}"
+                customer_obj, created = CustomerService.create_or_get_customer(
                     branch=user_branch,
-                    full_name__iexact=cust_name
-                ).first()
+                    full_name=cust_name,
+                    phone=deterministic_phone,
+                    email=(header.get('email') or '').strip() or None,
+                    address=(header.get('address') or '').strip() or None,
+                    create_if_missing=True
+                )
             except Exception as e:
-                logger.warning(f"Failed to find customer by name: {e}")
+                logger.warning(f"Failed to create/get customer with deterministic phone: {e}")
                 customer_obj = None
 
     # Priority 3: Create temporary customer using plate if available
