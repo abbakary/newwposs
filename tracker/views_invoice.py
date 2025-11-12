@@ -206,31 +206,33 @@ def api_upload_extract_invoice(request):
                 logger.warning(f"Failed to create/get customer from extracted data: {e}")
                 customer_obj = None
         elif not customer_obj and cust_name:
-            # Only name available, try to find matching customer
+            # Only name available - use deterministic phone for deduplication
+            # This ensures same customer name always maps to same customer record
             try:
-                customer_obj = Customer.objects.filter(
+                deterministic_phone = f"INVOICE_{cust_name.upper()[:50].replace(' ', '_')}"
+                customer_obj, created = CustomerService.create_or_get_customer(
                     branch=user_branch,
-                    full_name__iexact=cust_name
-                ).first()
+                    full_name=cust_name,
+                    phone=deterministic_phone,
+                    email=(header.get('email') or '').strip() or None,
+                    address=(header.get('address') or '').strip() or None,
+                    create_if_missing=True
+                )
             except Exception as e:
-                logger.warning(f"Failed to find customer by name: {e}")
+                logger.warning(f"Failed to create/get customer with deterministic phone: {e}")
                 customer_obj = None
 
-    # Priority 3: Create temporary customer using plate if available
+    # Priority 3: Try to find customer by plate number (via vehicles)
     if not customer_obj and plate:
         try:
-            temp_name = f"Plate {plate}"
-            temp_phone = f"PLATE_{plate}"
-            customer_obj, created = CustomerService.create_or_get_customer(
-                branch=user_branch,
-                full_name=temp_name,
-                phone=temp_phone,
-                email=None,
-                address=None,
-                create_if_missing=True
-            )
+            vehicle = Vehicle.objects.filter(
+                plate_number__iexact=plate,
+                customer__branch=user_branch
+            ).select_related('customer').first()
+            if vehicle and vehicle.customer:
+                customer_obj = vehicle.customer
         except Exception as e:
-            logger.warning(f"Failed to create temp customer for plate {plate}: {e}")
+            logger.warning(f"Failed to find customer by plate {plate}: {e}")
             customer_obj = None
 
     # If still no customer, return extraction data for manual review

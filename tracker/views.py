@@ -344,11 +344,11 @@ def dashboard(request: HttpRequest):
                 total_vat=Sum('tax_amount'),
                 total_gross=Sum('total_amount')
             )
-            if inv_sums.get('total_net'):
+            if inv_sums.get('total_net') is not None:
                 total_revenue = Decimal(str(inv_sums.get('total_net')))
-            if inv_sums.get('total_vat'):
+            if inv_sums.get('total_vat') is not None:
                 total_vat = Decimal(str(inv_sums.get('total_vat')))
-            if inv_sums.get('total_gross'):
+            if inv_sums.get('total_gross') is not None:
                 total_gross = Decimal(str(inv_sums.get('total_gross')))
 
             # For backward compatibility, keep total_invoiced as total_amount
@@ -363,11 +363,11 @@ def dashboard(request: HttpRequest):
                 month_vat=Sum('tax_amount'),
                 month_gross=Sum('total_amount')
             )
-            if inv_month_sums.get('month_net'):
+            if inv_month_sums.get('month_net') is not None:
                 revenue_this_month = Decimal(str(inv_month_sums.get('month_net')))
-            if inv_month_sums.get('month_vat'):
+            if inv_month_sums.get('month_vat') is not None:
                 vat_this_month = Decimal(str(inv_month_sums.get('month_vat')))
-            if inv_month_sums.get('month_gross'):
+            if inv_month_sums.get('month_gross') is not None:
                 gross_this_month = Decimal(str(inv_month_sums.get('month_gross')))
 
             # For backward compatibility
@@ -1495,7 +1495,6 @@ def customer_register(request: HttpRequest):
                         except Exception:
                             est_int = None
 
-                    from .utils import get_user_branch
                     o = Order.objects.create(
                         customer=c,
                         vehicle=v,
