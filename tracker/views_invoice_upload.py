@@ -182,6 +182,8 @@ def api_create_invoice_from_upload(request):
 
             # Resolve customer using multiple strategies to prevent duplicates
             customer_obj = None
+            org_name = (request.POST.get('organization_name') or '').strip() or None
+            tax_num = (request.POST.get('tax_number') or '').strip() or None
 
             # Strategy 1: Find by name + phone with full deduplication logic (most reliable)
             if customer_name and customer_phone:
@@ -190,10 +192,12 @@ def api_create_invoice_from_upload(request):
                         branch=user_branch,
                         full_name=customer_name,
                         phone=customer_phone,
-                        organization_name=request.POST.get('organization_name'),
-                        tax_number=request.POST.get('tax_number'),
+                        organization_name=org_name,
+                        tax_number=tax_num,
                         customer_type=customer_type
                     )
+                    if customer_obj:
+                        logger.info(f"Found existing customer by name+phone: {customer_obj.id}")
                 except Exception as e:
                     logger.warning(f"Duplicate customer check by name+phone failed: {e}")
 
@@ -205,6 +209,8 @@ def api_create_invoice_from_upload(request):
                         full_name=customer_name,
                         plate_number=plate,
                     )
+                    if customer_obj:
+                        logger.info(f"Found existing customer by name+plate: {customer_obj.id}")
                 except Exception as e:
                     logger.warning(f"Composite name+plate lookup failed: {e}")
 
@@ -215,6 +221,8 @@ def api_create_invoice_from_upload(request):
                         branch=user_branch,
                         full_name=customer_name,
                     )
+                    if customer_obj:
+                        logger.info(f"Found existing customer by name only: {customer_obj.id}")
                 except Exception as e:
                     logger.warning(f"Name-only lookup failed: {e}")
 
