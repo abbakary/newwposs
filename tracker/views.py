@@ -1188,36 +1188,8 @@ def customer_register(request: HttpRequest):
                         messages.error(request, "Error creating customer")
                         return redirect(f"{reverse('tracker:customer_register')}?step=1")
 
-                # Before proceeding to next step, check if customer already exists
-                existing_customer = CustomerService.find_duplicate_customer(
-                    branch=user_branch,
-                    full_name=full_name,
-                    phone=phone,
-                    organization_name=data.get("organization_name"),
-                    tax_number=data.get("tax_number"),
-                    customer_type=data.get("customer_type")
-                )
-
-                if existing_customer:
-                    can_access = request.user.is_superuser or (
-                        user_branch is not None and existing_customer.branch_id == user_branch.id
-                    )
-
-                    if can_access:
-                        # Customer exists in same branch - redirect to customer detail page
-                        dup_url = reverse("tracker:customer_detail", kwargs={'pk': existing_customer.id}) + "?flash=existing_customer&from_registration=1"
-                        if is_ajax:
-                            return json_response(
-                                False,
-                                form=form,
-                                message=f"Customer '{full_name}' already exists. You can create an order from their profile.",
-                                message_type='info',
-                                redirect_url=dup_url
-                            )
-                        messages.info(request, f"Customer '{full_name}' already exists. You can create an order from their profile.")
-                        return redirect(dup_url)
-
                 # Continue to next step (don't create yet, just save to session)
+                # Note: customer existence was already checked above - if customer exists, we redirect
                 request.session["reg_step1"] = form.cleaned_data
                 request.session.save()
 
