@@ -180,71 +180,22 @@ def api_create_invoice_from_upload(request):
             customer_type = request.POST.get('customer_type', 'personal')
             plate = (request.POST.get('plate') or '').strip().upper() or None
 
-            # Resolve customer using multiple strategies to prevent duplicates
-            customer_obj = None
+            # Require minimum customer info
+            if not customer_name or not customer_phone:
+                return JsonResponse({
+                    'success': False,
+                    'message': 'Customer name and phone are required'
+                })
 
-            # Strategy 1: Find by name + phone with full deduplication logic (most reliable)
-            if customer_name and customer_phone:
-                try:
-                    customer_obj = CustomerService.find_duplicate_customer(
-                        branch=user_branch,
-                        full_name=customer_name,
-                        phone=customer_phone,
-                        organization_name=request.POST.get('organization_name'),
-                        tax_number=request.POST.get('tax_number'),
-                        customer_type=customer_type
-                    )
-                except Exception as e:
-                    logger.warning(f"Duplicate customer check by name+phone failed: {e}")
+            org_name = (request.POST.get('organization_name') or '').strip() or None
+            tax_num = (request.POST.get('tax_number') or '').strip() or None
 
-            # Strategy 2: If not found via name+phone and plate available, try name+plate
-            if not customer_obj and customer_name and plate:
-                try:
-                    customer_obj = CustomerService.find_customer_by_name_and_plate(
-                        branch=user_branch,
-                        full_name=customer_name,
-                        plate_number=plate,
-                    )
-                except Exception as e:
-                    logger.warning(f"Composite name+plate lookup failed: {e}")
-
-            # Strategy 3: Fallback to name-only lookup (least strict)
-            if not customer_obj and customer_name:
-                try:
-                    customer_obj = CustomerService.find_customer_by_name_only(
-                        branch=user_branch,
-                        full_name=customer_name,
-                    )
-                except Exception as e:
-                    logger.warning(f"Name-only lookup failed: {e}")
-
-            # If found existing customer, use that customer
-            if customer_obj:
-                # Update contact info if we found existing by name+plate or name-only
-                updated = False
-                try:
-                    if customer_email and (not customer_obj.email or customer_obj.email != customer_email):
-                        customer_obj.email = customer_email
-                        updated = True
-                    if customer_address and (not customer_obj.address or customer_obj.address != customer_address):
-                        customer_obj.address = customer_address
-                        updated = True
-                    if customer_phone and (not customer_obj.phone or customer_obj.phone != customer_phone):
-                        # Only update phone if extracted phone looks valid
-                        if len(customer_phone.strip()) >= 7:
-                            customer_obj.phone = customer_phone
-                            updated = True
-                    if updated:
-                        customer_obj.save(update_fields=['email', 'address', 'phone'] if customer_phone else ['email', 'address'])
-                except Exception:
-                    pass
-            else:
-                # Customer not found - create new one using name + phone
-                if not customer_name or not customer_phone:
-                    return JsonResponse({
-                        'success': False,
-                        'message': 'Customer name and phone are required to create new customer'
-                    })
+            # Use centralized service which does proper deduplication
+            # This method will:
+            # 1. Check if customer exists by name+phone+organization+tax (with phone normalization)
+            # 2. If found, update contact info and return existing customer
+            # 3. If NOT found, create new customer
+            try:
                 customer_obj, created = CustomerService.create_or_get_customer(
                     branch=user_branch,
                     full_name=customer_name,
@@ -252,32 +203,50 @@ def api_create_invoice_from_upload(request):
                     email=customer_email,
                     address=customer_address,
                     customer_type=customer_type,
+                    organization_name=org_name,
+                    tax_number=tax_num,
                     create_if_missing=True
                 )
+
                 if not customer_obj:
                     return JsonResponse({
                         'success': False,
-                        'message': 'Failed to create customer'
+                        'message': 'Failed to create or find customer'
                     })
+
+                if created:
+                    logger.info(f"Created new customer from invoice upload: {customer_obj.id} - {customer_name}")
+                else:
+                    logger.info(f"Found existing customer for invoice upload: {customer_obj.id} - {customer_name}")
+
+            except Exception as e:
+                logger.error(f"Error in customer creation/lookup for invoice: {e}")
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Error processing customer: {str(e)}'
+                })
 
             # Get or create vehicle if plate provided
             vehicle = None
             if plate:
                 try:
                     vehicle = VehicleService.create_or_get_vehicle(customer=customer_obj, plate_number=plate)
+                    logger.info(f"Vehicle linked to customer {customer_obj.id}: {plate}")
                 except Exception as e:
-                    logger.warning(f"Failed to create/get vehicle: {e}")
+                    logger.warning(f"Failed to create/get vehicle for customer {customer_obj.id}: {e}")
                     vehicle = None
-            
+
             # Get existing started order if provided
             selected_order_id = request.POST.get('selected_order_id')
             order = None
             if selected_order_id:
                 try:
                     order = Order.objects.get(id=int(selected_order_id), branch=user_branch)
-                except Exception:
+                    logger.info(f"Found existing order {order.id} to update")
+                except Exception as e:
+                    logger.warning(f"Could not find existing order {selected_order_id}: {e}")
                     pass
-            
+
             # If no existing order, create new one
             if not order:
                 try:
@@ -288,17 +257,22 @@ def api_create_invoice_from_upload(request):
                         vehicle=vehicle,
                         description='Created from invoice upload'
                     )
+                    logger.info(f"Created new order {order.id} for customer {customer_obj.id}")
                 except Exception as e:
-                    logger.warning(f"Failed to create order: {e}")
+                    logger.error(f"Failed to create order for customer {customer_obj.id}: {e}")
                     return JsonResponse({
                         'success': False,
                         'message': f'Failed to create order: {str(e)}'
                     })
             else:
-                # Update existing started order
-                order.customer = customer_obj
-                order.vehicle = vehicle or order.vehicle
-                order.save()
+                # Update existing started order to ensure it's linked to the correct customer
+                if order.customer_id != customer_obj.id:
+                    order.customer = customer_obj
+                    logger.info(f"Updated order {order.id} customer from {order.customer_id} to {customer_obj.id}")
+                if vehicle and order.vehicle_id != vehicle.id:
+                    order.vehicle = vehicle
+                    logger.info(f"Updated order {order.id} vehicle to {vehicle.id}")
+                order.save(update_fields=['customer', 'vehicle'] if vehicle else ['customer'])
             
             # Create or reuse invoice (enforce one invoice per order)
             inv = None

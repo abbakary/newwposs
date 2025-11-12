@@ -1309,7 +1309,6 @@ def customer_register(request: HttpRequest):
                 phone = data.get("phone")
                 
                 # Match DB uniqueness: check same-branch exact duplicate first (branch, full_name, phone, organization_name, tax_number)
-                from .utils import get_user_branch
                 user_branch = get_user_branch(request.user)
                 org_name = data.get("organization_name") or None
                 tax_num = data.get("tax_number") or None
@@ -1436,7 +1435,6 @@ def customer_register(request: HttpRequest):
                             except Exception:
                                 est_minutes = 0
 
-                            from .utils import get_user_branch
                             o = Order.objects.create(
                                 customer=c,
                                 vehicle=v,
@@ -1519,8 +1517,7 @@ def customer_register(request: HttpRequest):
                     followup_date = step3_data.get('followup_date') or request.POST.get("followup_date")
                     
                     final_description = description or f"Inquiry: {inquiry_type} - {questions}"
-                    
-                    from .utils import get_user_branch
+
                     o = Order.objects.create(
                         customer=c,
                         vehicle=v,
@@ -1810,7 +1807,6 @@ def create_order_for_customer(request: HttpRequest, pk: int):
         # Ensure vehicle belongs to this customer
         form.fields["vehicle"].queryset = c.vehicles.all()
         if form.is_valid():
-            from .utils import get_user_branch
             o = form.save(commit=False)
             o.customer = c
             o.branch = get_user_branch(request.user)
@@ -5345,7 +5341,6 @@ def customers_quick_create(request: HttpRequest):
                 return JsonResponse({'success': False, 'message': 'Name and phone are required'})
 
             # Create customer using centralized service (handles deduplication automatically)
-            from .utils import get_user_branch
             from .services import CustomerService
             customer_branch = get_user_branch(request.user)
 
