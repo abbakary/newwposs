@@ -1435,7 +1435,6 @@ def customer_register(request: HttpRequest):
                             except Exception:
                                 est_minutes = 0
 
-                            from .utils import get_user_branch
                             o = Order.objects.create(
                                 customer=c,
                                 vehicle=v,
