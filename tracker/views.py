@@ -363,11 +363,11 @@ def dashboard(request: HttpRequest):
                 month_vat=Sum('tax_amount'),
                 month_gross=Sum('total_amount')
             )
-            if inv_month_sums.get('month_net'):
+            if inv_month_sums.get('month_net') is not None:
                 revenue_this_month = Decimal(str(inv_month_sums.get('month_net')))
-            if inv_month_sums.get('month_vat'):
+            if inv_month_sums.get('month_vat') is not None:
                 vat_this_month = Decimal(str(inv_month_sums.get('month_vat')))
-            if inv_month_sums.get('month_gross'):
+            if inv_month_sums.get('month_gross') is not None:
                 gross_this_month = Decimal(str(inv_month_sums.get('month_gross')))
 
             # For backward compatibility
