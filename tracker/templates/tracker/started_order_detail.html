@@ -1395,10 +1395,18 @@
                     const result = await response.json();
 
                     if (result.success){
-                      showSuccess('<i class="fa fa-check-circle me-2"></i>Invoice created successfully! Redirecting...', false);
-                      setTimeout(function(){
-                        window.location.href = result.redirect_url || ('/tracker/invoices/' + result.invoice_id + '/');
-                      }, 1000);
+                      if (result.redirect_url){
+                        // If a redirect URL is provided (e.g., for customer profile), use it
+                        showSuccess('<i class="fa fa-check-circle me-2"></i>' + (result.message || 'Processing...') + ' Redirecting...', false);
+                        setTimeout(function(){
+                          window.location.href = result.redirect_url;
+                        }, 1000);
+                      } else {
+                        showSuccess('<i class="fa fa-check-circle me-2"></i>Invoice created successfully! Redirecting...', false);
+                        setTimeout(function(){
+                          window.location.href = result.redirect_url || ('/tracker/invoices/' + result.invoice_id + '/');
+                        }, 1000);
+                      }
                     } else {
                       showError(`<i class="fa fa-exclamation-circle me-2"></i>${result.message || 'Failed to create invoice'}`);
                       if (uploadProgress) uploadProgress.style.display = 'none';
