@@ -100,6 +100,12 @@
             var saveOnly = document.getElementById('saveOnly'); if(saveOnly) saveOnly.value='0';
             ajaxPostForm(form, function(data){
               try{
+                // Check if customer already exists and redirect_url is provided
+                if(data && data.redirect_url && !data.success){
+                  // Customer exists - show modal with options instead of immediate redirect
+                  showExistingCustomerModal(data.redirect_url, data.message || 'Customer already exists');
+                  return;
+                }
                 // If server returned form_html with errors, render it
                 if(data && data.form_html && (!data.success)){
                   document.getElementById('registrationWizard').innerHTML = data.form_html; bindWizard();
@@ -507,4 +513,64 @@
 
   // Expose a flag so inline progressive enhancement knows AJAX is active
   window.__CUSTOMER_REG_AJAX = true;
+
+  // Function to show existing customer modal with options
+  window.showExistingCustomerModal = function(customerDetailUrl, message) {
+    // Extract customer ID from URL
+    var customerIdMatch = customerDetailUrl.match(/\/customers\/(\d+)\//);
+    var customerId = customerIdMatch ? customerIdMatch[1] : null;
+
+    if (!customerId) {
+      // Fallback to direct redirect if can't extract ID
+      window.location.href = customerDetailUrl;
+      return;
+    }
+
+    // Create and show modal
+    var modalHtml = `
+      <div class="modal fade" id="existingCustomerModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+          <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+              <h5 class="modal-title">
+                <i class="fa fa-user-check me-2"></i>Customer Already Exists
+              </h5>
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+              <p class="mb-3"><i class="fa fa-info-circle me-2 text-info"></i>${message}</p>
+              <p class="text-muted mb-0">What would you like to do?</p>
+            </div>
+            <div class="modal-footer bg-light">
+              <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
+              <a href="${customerDetailUrl}" class="btn btn-info">
+                <i class="fa fa-user me-1"></i>View Profile
+              </a>
+              <a href="/tracker/customers/${customerId}/order/new/" class="btn btn-primary">
+                <i class="fa fa-plus-circle me-1"></i>Create Order
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Remove existing modal if any
+    var existing = document.getElementById('existingCustomerModal');
+    if (existing) {
+      existing.remove();
+    }
+
+    // Add modal to body
+    document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+    // Show the modal
+    try {
+      var modal = new bootstrap.Modal(document.getElementById('existingCustomerModal'));
+      modal.show();
+    } catch(e) {
+      console.error('Error showing existing customer modal:', e);
+      window.location.href = customerDetailUrl;
+    }
+  };
 })();

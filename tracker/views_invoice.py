@@ -554,12 +554,20 @@ def invoice_create(request, order_id=None):
     vehicle = None
     started_orders = []
     plate_search = request.GET.get('plate', '').strip().upper()
+    customer_id = request.GET.get('customer_id', '').strip()
 
     user_branch = get_user_branch(request.user)
 
     # If searching by plate, find all started orders for that plate
     if plate_search:
         started_orders = OrderService.find_all_started_orders_for_plate(user_branch, plate_search)
+
+    # If customer_id is provided, load that customer
+    if customer_id and not order:
+        try:
+            customer = Customer.objects.get(pk=customer_id, branch=user_branch)
+        except Customer.DoesNotExist:
+            logger.warning(f"Customer {customer_id} not found for invoice creation")
 
     # If order_id is provided, load that order
     if order_id:
@@ -747,6 +755,17 @@ def invoice_create(request, order_id=None):
                 initial['reference'] = vehicle.plate_number
             else:
                 initial['reference'] = order.order_number
+
+        # Pre-populate customer if available
+        if customer:
+            initial['existing_customer'] = customer.id
+            initial['customer_name'] = customer.full_name
+            initial['customer_phone'] = customer.phone
+            if customer.email:
+                initial['customer_email'] = customer.email
+            if customer.address:
+                initial['customer_address'] = customer.address
+
         try:
             form = InvoiceForm(user=request.user, initial=initial)
         except TypeError:
